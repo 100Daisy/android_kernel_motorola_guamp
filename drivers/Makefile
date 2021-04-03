@@ -191,3 +191,5 @@ obj-$(CONFIG_UNISYS_VISORBUS)	+= visorbus/
 obj-$(CONFIG_SIOX)		+= siox/
 obj-$(CONFIG_GNSS)		+= gnss/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
+obj-$(CONFIG_MMI_ANNOTATE)	+= mmi_annotate/
+obj-$(CONFIG_MMI_INFO)		+= mmi_info/

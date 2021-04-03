@@ -232,4 +232,9 @@ source "drivers/sensors/Kconfig"
 source "drivers/gpu/msm/Kconfig"
 
 source "drivers/energy_model/Kconfig"
+
+source "drivers/mmi_annotate/Kconfig"
+
+source "drivers/mmi_info/Kconfig"
+
 endmenu
