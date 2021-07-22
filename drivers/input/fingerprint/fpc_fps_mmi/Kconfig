@@ -1,0 +1,17 @@
+config FINGERPRINT_FPC_TEE_MMI
+	tristate "Finger print card fpc"
+	depends on INPUT_FINGERPRINT
+	default n
+	help
+	  Say Y here to enable support for retrieving self-test reports.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here.
+
+config INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+	bool "BOARD_HAS_MULTI_FPS"
+	depends on FINGERPRINT_FPC_TEE_MMI
+	default y
+	help
+	  Say Y here to enable support for multiple fps.

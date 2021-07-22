@@ -1,0 +1,47 @@
+config FINGERPRINT_EGISTEC_FPS_MMI
+	tristate "Egistec FPS fingerprint sensor"
+	depends on INPUT_FINGERPRINT
+	default n
+	help
+	 Say Y here if you wish to include support for EGIS finger print sensor.
+	 If unsure, say N.
+
+config INPUT_EGISTEC_FPS_NAVI
+	bool "Egistec fingerprint horizontal navigation"
+	depends on FINGERPRINT_EGISTEC_FPS_MMI
+	default y
+	help
+	 Say Y here if you wish to include navigation support for EGIS finger print sensor.
+	 If unsure, say Y.
+
+config INPUT_EGISTEC_FPS_NAVI_HORIZON
+	bool "Egistec fingerprint horizontal navigation"
+	depends on INPUT_EGISTEC_FPS_NAVI
+	default y
+	help
+	 Say Y here if you wish to include horizontal navigation support for EGIS finger print sensor.
+	 If unsure, say Y.
+
+config INPUT_EGISTEC_FPS_NAVI_VERTICAL
+	bool "Egistec fingerprint vertical navigation"
+	depends on INPUT_EGISTEC_FPS_NAVI
+	default y
+	help
+	 Say Y here if you wish to include vertical navigation support for EGIS finger print sensor.
+	 If unsure, say Y.
+
+config NAV_DOUBLE_TAP
+	bool "Egistec fingerprint display double tap"
+	depends on FINGERPRINT_EGISTEC_FPS_MMI
+	default y
+	help
+	 Say Y here if you wish to include double tap support for EGIS finger print sensor.
+	 If unsure, say Y.
+
+config DISPLAY_SPEED_UP
+	bool "Egistec fingerprint display speed up"
+	depends on FINGERPRINT_EGISTEC_FPS_MMI
+	default n
+	help
+	 Say Y here if you wish to include display speed up support for EGIS finger print sensor.
+	 If unsure, say N.
