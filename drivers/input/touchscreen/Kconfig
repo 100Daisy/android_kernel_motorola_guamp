@@ -1365,5 +1365,6 @@ config TOUCHSCREEN_HIMAX_CHIPSET
 
 	  If unsure, say N.
 source "drivers/input/touchscreen/hxchipset/Kconfig"
+source "drivers/input/touchscreen/himax_v2_mmi/Kconfig"
 
 endif
