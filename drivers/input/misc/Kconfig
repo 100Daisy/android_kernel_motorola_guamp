@@ -884,5 +884,15 @@ config INPUT_SC27XX_VIBRA
 
 	  To compile this driver as a module, choose M here. The module will
 	  be called sc27xx_vibra.
+	  
+config INPUT_STMVL53L1
+	tristate "STM VL53L1 Proximity support"
+	depends on INPUT && I2C
+	help
+	  Say Y here if you want to use STMicroelectronics's proximity sensor
+	  through I2C interface.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called stmvl53l1.
 
 endif
