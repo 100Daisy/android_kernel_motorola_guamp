@@ -1,0 +1,59 @@
+#
+# Focaltech Touchscreen driver configuration
+#
+
+config TOUCHSCREEN_FTS_0FLASH_MMI
+	tristate "Moto Focaltech Touchscreen"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you have Moto Focaltech touch panel.
+	  If unsure, say N.
+
+config INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8719
+	bool "Focaltech Chip FT8719"
+	depends on TOUCHSCREEN_FTS_0FLASH_MMI
+	default n
+	help
+	  Say Y here to enable support for Focaltech FT8719 touch panel.
+	  If unsure, say N.
+
+config INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756
+	bool "Focaltech Chip FT8756"
+	depends on TOUCHSCREEN_FTS_0FLASH_MMI
+	default n
+	help
+	  Say Y here to enable support for Focaltech FT8756 touch panel.
+	  If unsure, say N.
+
+config INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009
+	bool "Focaltech Chip FT8009"
+	depends on TOUCHSCREEN_FTS_0FLASH_MMI
+	default n
+	help
+	  Say Y here to enable support for Focaltech FT8009 touch panel.
+	  If unsure, say N.
+
+config TOUCHSCREEN_FTS_0FLASH_MMI_ENABLE_DOUBLE_TAP
+	bool "Moto Focaltech Double tap"
+	depends on TOUCHSCREEN_FTS_0FLASH_MMI
+	default n
+	help
+	  Say Y here to enable support for double tap functionality on Focaltech touch panel.
+	  If unsure, say N.
+
+config TOUCHSCREEN_FTS_0FLASH_MMI_ENABLE_PALM
+	bool "Moto Focaltech Palm"
+	depends on TOUCHSCREEN_FTS_0FLASH_MMI
+	default n
+	help
+	  Say Y here to enable support for Palm functionality on Focaltech touch panel.
+	  If unsure, say N.
+
+config INPUT_FOCALTECH_0FLASH_MMI_PEN_NOTIFIER
+	bool "Moto Focaltech Pen"
+	depends on TOUCHSCREEN_FTS_0FLASH_MMI
+        default n
+        help
+          Say Y here to enable support for Pen functionality on Focaltech touch panel.
+          If unsure, say N.

@@ -1367,4 +1367,34 @@ config TOUCHSCREEN_HIMAX_CHIPSET
 source "drivers/input/touchscreen/hxchipset/Kconfig"
 source "drivers/input/touchscreen/himax_v2_mmi/Kconfig"
 
+config TOUCHSCREEN_SYNAPTICS_DSX
+        bool "Synaptics DSX Touchscreen Driver"
+        depends on I2C
+        help
+          Say Y here if you have a Synaptics Touchscreen.
+
+          If unsure, say N.
+
+source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
+
+config TOUCHSCREEN_SYNAPTICS_TCM
+	bool "Synaptics TCM Touchscreen Driver"
+	depends on I2C
+	help
+	  Say Y here if you have a Synaptics Touchscreen.
+
+	  If unsure, say N.
+
+source "drivers/input/touchscreen/synaptics_tcm/Kconfig"
+source "drivers/input/touchscreen/focaltech_0flash_mmi/Kconfig"
+
+config TOUCHSCREEN_RAYDIUM_CHIPSET
+	bool "Raydium WT030 touchpanel CHIPSET"
+	depends on I2C
+	help
+	  Say Y here if you have a Raydium WT030 CHIPSET touchscreen.
+
+	  If unsure, say N.
+
 endif
+
