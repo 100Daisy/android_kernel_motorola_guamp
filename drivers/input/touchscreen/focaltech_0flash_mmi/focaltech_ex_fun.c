@@ -668,7 +668,9 @@ static ssize_t fts_poweron_show(struct device *dev, struct device_attribute *att
 
 static ssize_t fts_productinfo_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    return scnprintf(buf, PAGE_SIZE, "%s\n", FTS_CHIP_NAME);
+    struct fts_ts_data *ts_data = fts_data;
+    struct fts_ts_platform_data *pdata = ts_data->pdata;
+    return scnprintf(buf, PAGE_SIZE, "%s\n", pdata->chip_name);
 }
 
 /* fts_tpfwver interface */
@@ -1083,6 +1085,8 @@ static ssize_t doreflash_store(struct device *dev,
     char prefix[FILE_NAME_LENGTH] = "focaltech";
     char template[FILE_NAME_LENGTH];
     struct input_dev *input_dev = fts_data->input_dev;
+    struct fts_ts_data *ts_data = fts_data;
+    struct fts_ts_platform_data *pdata = ts_data->pdata;
 
     if (count > FILE_NAME_LENGTH) {
         FTS_ERROR("%s: FW filename is too long\n", __func__);
@@ -1095,9 +1099,9 @@ static ssize_t doreflash_store(struct device *dev,
             return -EINVAL;
         }
 
-        snprintf(template, sizeof(template), "-%s-", FTS_CHIP_NAME);
+        snprintf(template, sizeof(template), "-%s-", pdata->chip_name);
         if (!strnstr(buf + strnlen(prefix, sizeof(prefix)), template, count)) {
-            FTS_ERROR("%s: FW does not belong to %s\n", __func__, FTS_CHIP_NAME);
+            FTS_ERROR("%s: FW does not belong to %s\n", __func__, pdata->chip_name);
             return -EINVAL;
         }
     }
@@ -1391,6 +1395,8 @@ static int fts_sysfs_class(void *_data, bool create)
 	static struct class *touchscreen_class;
 	static struct device *ts_class_dev;
 	static int minor;
+	struct fts_ts_data *ts_data = fts_data;
+	struct fts_ts_platform_data *pdata = ts_data->pdata;
 
 	if (create) {
 		minor = input_get_new_minor(data->spi->chip_select,
@@ -1409,7 +1415,7 @@ static int fts_sysfs_class(void *_data, bool create)
 
 		ts_class_dev = device_create(touchscreen_class, NULL,
 				MKDEV(INPUT_MAJOR, minor),
-				data, FTS_CHIP_NAME);
+				data, pdata->chip_name);
 		if (IS_ERR(ts_class_dev)) {
 			error = PTR_ERR(ts_class_dev);
 			ts_class_dev = NULL;

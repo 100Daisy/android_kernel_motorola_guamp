@@ -1621,6 +1621,15 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 		FTS_INFO("panel supplier is %s", (char *)ts_data->panel_supplier);
 	}
 
+    ret = of_property_read_string(np, "focaltech,name",
+            &pdata->chip_name);
+    if (ret < 0) {
+        pdata->chip_name = NULL;
+        FTS_ERROR("Unable to read chip name\n");
+    } else {
+        FTS_INFO("chip name is %s", pdata->chip_name);
+    }
+
     FTS_FUNC_EXIT();
     return 0;
 }
