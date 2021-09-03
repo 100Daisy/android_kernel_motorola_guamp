@@ -54,16 +54,6 @@
 #define FTS_CHIP_IDC            ((FTS_CHIP_TYPE & FLAGBIT(FLAG_IDC_BIT)) == FLAGBIT(FLAG_IDC_BIT))
 #define FTS_HID_SUPPORTTED      ((FTS_CHIP_TYPE & FLAGBIT(FLAG_HID_BIT)) == FLAGBIT(FLAG_HID_BIT))
 
-#if defined(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756)
-#define FTS_CHIP_TYPE_MAPPING {{0x15, 0x87, 0x56, 0x87, 0x56, 0xF7, 0xA6, 0x00, 0x00}}
-#elif defined(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8719)
-#define FTS_CHIP_TYPE_MAPPING {{0x0D,0x87, 0x19, 0x87, 0x19, 0x87, 0xA9, 0x87, 0xB9}}
-#elif defined(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009)
-#define FTS_CHIP_TYPE_MAPPING {{0x17, 0x80, 0x09, 0x80, 0x09, 0x80, 0xA9, 0x00, 0x00}}
-#else
-#define FTS_CHIP_TYPE_MAPPING {{0x0D,0x87, 0x19, 0x87, 0x19, 0x87, 0xA9, 0x87, 0xB9}}
-#endif
-
 #define FILE_NAME_LENGTH                    128
 #define ENABLE                              1
 #define DISABLE                             0
