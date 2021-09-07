@@ -1,0 +1,4 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+
+obj-$(CONFIG_AW8624_HAPTIC) += aw8624.o
