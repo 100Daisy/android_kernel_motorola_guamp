@@ -3217,7 +3217,7 @@ int himax_chip_common_init(void)
 		E("%s: alloc i_CTPM_firmware_name failed\n", __func__);
 		goto firmware_name_alloc_failed;
 	}
-	if (strlen(pdata->panel_supplier))
+	if (pdata->panel_supplier[0])
 		snprintf(i_CTPM_firmware_name, HIMAX_FILE_NAME_LENGTH, "%s_Himax_firmware.bin",
 			pdata->panel_supplier);
 	else
