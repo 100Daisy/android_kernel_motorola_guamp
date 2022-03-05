@@ -4,7 +4,7 @@
 
 config TOUCHSCREEN_FTS_0FLASH_MMI
 	tristate "Moto Focaltech Touchscreen"
-	depends on I2C
+	depends on SPI
 	default n
 	help
 	  Say Y here if you have Moto Focaltech touch panel.

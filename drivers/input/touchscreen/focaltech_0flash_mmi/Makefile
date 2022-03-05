@@ -5,18 +5,13 @@ focaltech_0flash_mmi-y += focaltech_ex_mode.o
 focaltech_0flash_mmi-y += focaltech_flash.o
 focaltech_0flash_mmi-y += focaltech_gesture.o
 focaltech_0flash_mmi-y += focaltech_point_report_check.o
-focaltech_0flash_mmi-y += focaltech_test/focaltech_test.o
-focaltech_0flash_mmi-y += focaltech_test/focaltech_test_ini.o
 
-focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8719) += focaltech_test/supported_ic/focaltech_test_ft8719.o
 focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8719) += focaltech_flash_ft8719.o
 focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8719) += focaltech_spi_v1_1.o
 
-focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756) += focaltech_test/supported_ic/focaltech_test_ft8756.o
 focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756) += focaltech_flash_ft8756.o
 focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756) += focaltech_spi_v1_1_1.o
 
-focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009) += focaltech_test/supported_ic/focaltech_test_ft8756.o
 focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009) += focaltech_flash_ft8756.o
 focaltech_0flash_mmi-$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009) += focaltech_spi_v1_1_1.o
 
