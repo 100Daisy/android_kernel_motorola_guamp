@@ -237,6 +237,7 @@ static int fts_get_chip_types(
 {
     int i = 0;
     struct ft_chip_t ctype[] = {0};
+    u32 ctype_entries;
 
     struct ft_chip_t ctype_8756[] = {{0x15, 0x87, 0x56, 0x87, 0x56, 0xF7, 0xA6, 0x00, 0x00}};
     struct ft_chip_t ctype_8009[] = {{0x17, 0x80, 0x09, 0x80, 0x09, 0x80, 0xA9, 0x00, 0x00}};
@@ -250,7 +251,7 @@ static int fts_get_chip_types(
         return -EINVAL;
     }
 
-    u32 ctype_entries = sizeof(ctype) / sizeof(struct ft_chip_t);
+    ctype_entries = sizeof(ctype) / sizeof(struct ft_chip_t);
 
     FTS_DEBUG("verify id:0x%02x%02x", id_h, id_l);
     for (i = 0; i < ctype_entries; i++) {
