@@ -15,7 +15,6 @@
 
 /*#include "himax_common.h"*/
 /*#include "himax_ic_core.h"*/
-#include "himax_inspection.h"
 #include "himax_modular_table.h"
 
 #ifdef HX_SMART_WAKEUP
@@ -279,13 +278,7 @@ static void himax_ts_late_resume(struct early_suspend *h);
 int g_ts_dbg;
 EXPORT_SYMBOL(g_ts_dbg);
 
-/* File node for Selftest, SMWP and HSEN - Start*/
-#define HIMAX_PROC_SELF_TEST_FILE	"self_test"
-struct proc_dir_entry *himax_proc_self_test_file;
-
-#define HIMAX_PROC_SELF_TEST_RAW_FILE	"self_test_rawdata"
-struct proc_dir_entry *himax_proc_self_raw_file = NULL;
-
+/* File node for SMWP and HSEN - Start*/
 uint8_t HX_PROC_SEND_FLAG;
 EXPORT_SYMBOL(HX_PROC_SEND_FLAG);
 
@@ -306,7 +299,7 @@ EXPORT_SYMBOL(HX_PROC_SEND_FLAG);
 	struct proc_dir_entry *himax_proc_edge_limit_file = NULL;
 #endif
 
-#if defined(HX_SMART_WAKEUP) || defined(CONFIG_TOUCHSCREEN_HIMAX_INSPECT)
+#if defined(HX_SMART_WAKEUP)
 bool FAKE_POWER_KEY_SEND = true;
 #endif
 
@@ -347,359 +340,6 @@ static int himax_palm_detect(uint8_t *buf)
 		return NOT_REPORT;
 #endif
 }
-#endif
-
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-static ssize_t himax_self_test_write(struct file *file, const char *buff,
-									size_t len, loff_t *pos)
-{
-	int i = 0;
-	char buf[80] = {0};
-
-	if (len >= 80) {
-		I("%s: no command exceeds 80 chars.\n", __func__);
-		return -EFAULT;
-	}
-
-	if (copy_from_user(buf, buff, len)) {
-		return -EFAULT;
-	}
-
-	if (hx_self_test_file_name == NULL) {
-		E("file name is NULL\n");
-		hx_self_test_file_name = kzalloc(80, GFP_KERNEL);
-		snprintf(hx_self_test_file_name, 15, "hx_criteria.csv");
-	}
-
-	for (i = 0; i < 80; i++) {
-		if (buf[i] == ',' || buf[i] == '\n') {
-			memset(hx_self_test_file_name, 0x0, 80);
-			memcpy(hx_self_test_file_name, buf, i);
-			I("%s: Get name from Customer\n", __func__);
-			break;
-		}
-	}
-	if (i == 80) {
-		memset(hx_self_test_file_name, 0x0, 80);
-		snprintf(hx_self_test_file_name, 16, "hx_criteria.csv");
-		I("%s: Use default name\n", __func__);
-		}
-	I("file name = %s\n", hx_self_test_file_name);
-
-	return len;
-}
-
-static ssize_t himax_self_test_read(struct file *file, char *buf,
-									size_t len, loff_t *pos)
-{
-	int val = 0x00;
-	size_t ret = 0;
-	char *temp_buf;
-	I("%s: enter, %d \n", __func__, __LINE__);
-
-	if (!HX_PROC_SEND_FLAG) {
-		temp_buf = kzalloc(len, GFP_KERNEL);
-		himax_int_enable(0);/* disable irq */
-		private_ts->in_self_test = 1;
-		val = g_core_fp.fp_chip_self_test();
-#ifdef HX_ESD_RECOVERY
-		HX_ESD_RESET_ACTIVATE = 1;
-#endif
-		himax_int_enable(1);/* enable irq */
-
-		if (val == 0x00) {
-			ret += snprintf(temp_buf + ret, len - ret, "Self_Test Pass\n");
-		} else {
-			ret += snprintf(temp_buf + ret, len - ret, "Self_Test Fail\n");
-		}
-
-		private_ts->in_self_test = 0;
-
-		if (copy_to_user(buf, temp_buf, len))
-			I("%s,here:%d\n", __func__, __LINE__);
-
-		kfree(temp_buf);
-		HX_PROC_SEND_FLAG = 1;
-	} else {
-		HX_PROC_SEND_FLAG = 0;
-	}
-
-	return ret;
-}
-
-static struct file_operations himax_proc_self_test_ops = {
-	.owner = THIS_MODULE,
-	.read = himax_self_test_read,
-	.write = himax_self_test_write,
-};
-
-static void *himax_self_raw_seq_start(struct seq_file *s, loff_t *pos)
-{
-	if (*pos >= 1) {
-		return NULL;
-	}
-	return (void *)((unsigned long) *pos + 1);
-}
-
-static void *himax_self_raw_seq_next(struct seq_file *s, void *v, loff_t *pos)
-{
-	return NULL;
-}
-
-static void himax_self_raw_seq_stop(struct seq_file *s, void *v)
-{
-}
-
-static int himax_self_raw_seq_read(struct seq_file *s, void *v)
-{
-	size_t ret = 0;
-
-	if (g_rslt_data != NULL) {
-			seq_printf(s, "%s", g_rslt_data);
-		}
-	return ret;
-}
-static struct seq_operations himax_self_raw_seq_ops = {
-	.start	= himax_self_raw_seq_start,
-	.next	= himax_self_raw_seq_next,
-	.stop	= himax_self_raw_seq_stop,
-	.show	= himax_self_raw_seq_read,
-};
-static int himax_self_raw_proc_open(struct inode *inode, struct file *file)
-{
-	return seq_open(file, &himax_self_raw_seq_ops);
-};
-static struct file_operations himax_proc_self_raw_ops = {
-	.owner = THIS_MODULE,
-	.open = himax_self_raw_proc_open,
-	.read = seq_read,
-};
-#endif
-
-#if 0
-static ssize_t himax_self_test(struct seq_file *s, void *v)
-{
-	int val = 0x00;
-	size_t ret = 0;
-
-	I("%s: enter, %d\n", __func__, __LINE__);
-
-	if (private_ts->suspended == 1) {
-		E("%s: please do self test in normal active mode\n", __func__);
-		return HX_INIT_FAIL;
-	}
-
-	himax_int_enable(0);/* disable irq */
-
-	private_ts->in_self_test = 1;
-
-	val = g_core_fp.fp_chip_self_test();
-/*
- *#ifdef HX_ESD_RECOVERY
- *	HX_ESD_RESET_ACTIVATE = 1;
- *#endif
- *	himax_int_enable(1); //enable irq
- */
-	if (val == HX_INSPECT_OK)
-		seq_puts(s, "Self_Test Pass:\n");
-	else
-		seq_puts(s, "Self_Test Fail:\n");
-
-	/*Print_Self_Test_Info(val,temp_buf);*/
-	if ((val & HX_INSPECT_EFILE) == HX_INSPECT_EFILE) {
-		seq_puts(s, "  Get criteria File Fail\n");
-		goto END_FUNC;
-	} else if ((val & HX_INSPECT_MEMALLCTFAIL) == HX_INSPECT_MEMALLCTFAIL) {
-		seq_puts(s, "  Allocate memory Fail\n");
-		goto END_FUNC;
-	} else {
-		seq_puts(s, "  Get criteria File OK\n");
-	}
-	if ((val & HX_INSPECT_EGETRAW) == HX_INSPECT_EGETRAW) {
-		seq_puts(s, "  Get raw data Fail\n");
-		goto END_FUNC;
-	} else {
-		seq_puts(s, "  Get raw data OK\n");
-	}
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-	if (g_inspt_crtra_flag[IDX_RAWMIN] == 1 && g_inspt_crtra_flag[IDX_RAWMAX] == 1) {
-		if ((val & HX_INSPECT_ERAW) == HX_INSPECT_ERAW)
-			seq_puts(s, "  Check Raw data Fail\n");
-		else
-			seq_puts(s, "  Check Raw data OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_WT_NOISEMAX] == 1 && g_inspt_crtra_flag[IDX_WT_NOISEMIN] == 1) {
-		if ((val & HX_INSPECT_WT_ENOISE) == HX_INSPECT_WT_ENOISE)
-			seq_puts(s, "  Check Noise(weight) Fail\n");
-		else
-			seq_puts(s, "  Check Noise(weight) OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_ABS_NOISEMAX] == 1 && g_inspt_crtra_flag[IDX_ABS_NOISEMIN] == 1) {
-		if ((val & HX_INSPECT_ABS_ENOISE) == HX_INSPECT_ABS_ENOISE)
-			seq_puts(s, "  Check Noise(absolute) Fail\n");
-		else
-			seq_puts(s, "  Check Noise(absolute) OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_OPENMIN] == 1 && g_inspt_crtra_flag[IDX_OPENMAX] == 1) {
-		if ((val & HX_INSPECT_EOPEN) == HX_INSPECT_EOPEN)
-			seq_puts(s, "  Check Sensor open Fail\n");
-		else
-			seq_puts(s, "  Check Sensor open OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_M_OPENMIN] == 1 && g_inspt_crtra_flag[IDX_M_OPENMAX] == 1) {
-		if ((val & HX_INSPECT_EMOPEN) == HX_INSPECT_EMOPEN)
-			seq_puts(s, "  Check Sensor micro open Fail\n");
-		else
-			seq_puts(s, "  Check Sensor micro open OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_SORTMIN] == 1 && g_inspt_crtra_flag[IDX_SORTMAX] == 1) {
-		if ((val & HX_INSPECT_ESHORT) == HX_INSPECT_ESHORT)
-			seq_puts(s, "  Check Sensor short Fail\n");
-		else
-			seq_puts(s, "  Check Sensor short OK\n");
-	}
-	if ((g_inspt_crtra_flag[IDX_GAP_HOR_RAWMIN] == 1 && g_inspt_crtra_flag[IDX_GAP_HOR_RAWMAX] == 1) ||
-		(g_inspt_crtra_flag[IDX_GAP_VER_RAWMIN] == 1 && g_inspt_crtra_flag[IDX_GAP_VER_RAWMAX] == 1)) {
-		if ((val & HX_INSPECT_EGAP_RAW) == HX_INSPECT_EGAP_RAW)
-			seq_puts(s, "  Check Raw Data GAP Fail\n");
-		else
-			seq_puts(s, "  Check Raw Data GAP OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_ACT_IDLE_RAWDATA_MIN] == 1 && g_inspt_crtra_flag[IDX_ACT_IDLE_RAWDATA_MAX] == 1) {
-		if ((val & HX_INSPECT_EACT_IDLE_RAW) == HX_INSPECT_EACT_IDLE_RAW)
-			seq_puts(s, "  Check ACT_IDLE RAW Fail\n");
-		else
-			seq_puts(s, "  Check ACT_IDLE RAW OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_ACT_IDLE_NOISE_MIN] == 1 && g_inspt_crtra_flag[IDX_ACT_IDLE_NOISE_MAX] == 1) {
-		if ((val & HX_INSPECT_EACT_IDLE_NOISE) == HX_INSPECT_EACT_IDLE_NOISE)
-			seq_puts(s, "  Check ACT_IDLE NOISE Fail\n");
-		else
-			seq_puts(s, "  Check ACT_IDLE NOISE OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_LPWUG_RAWDATA_MIN] == 1 && g_inspt_crtra_flag[IDX_LPWUG_RAWDATA_MAX] == 1) {
-		if ((val & HX_INSPECT_ELPWUG_RAW) == HX_INSPECT_ELPWUG_RAW)
-			seq_puts(s, "  Check LPWUG RAW  Fail\n");
-		else
-			seq_puts(s, "  Check LPWUG RAW  OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_LPWUG_NOISE_MIN] == 1 && g_inspt_crtra_flag[IDX_LPWUG_NOISE_MAX] == 1) {
-		if ((val & HX_INSPECT_ELPWUG_NOISE) == HX_INSPECT_ELPWUG_NOISE)
-			seq_puts(s, "  Check LPWUG NOISE Fail\n");
-		else
-			seq_puts(s, "  Check LPWUG NOISE OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_LPWUG_IDLE_RAWDATA_MIN] == 1 && g_inspt_crtra_flag[IDX_LPWUG_IDLE_RAWDATA_MAX] == 1) {
-		if ((val & HX_INSPECT_ELPWUG_IDLE_RAW) == HX_INSPECT_ELPWUG_IDLE_RAW)
-			seq_puts(s, "  Check LPWUG IDLE RAW Fail\n");
-		else
-			seq_puts(s, "  Check LPWUG IDLE RAW OK\n");
-	}
-	if (g_inspt_crtra_flag[IDX_LPWUG_IDLE_NOISE_MIN] == 1 && g_inspt_crtra_flag[IDX_LPWUG_IDLE_NOISE_MAX] == 1) {
-		if ((val & HX_INSPECT_ELPWUG_IDLE_NOISE) == HX_INSPECT_ELPWUG_IDLE_NOISE)
-			seq_puts(s, "  Check LPWUG IDLE NOISE Fail\n");
-		else
-			seq_puts(s, "  Check LPWUG IDLE NOISE OK\n");
-	}
-#endif
-
-END_FUNC:
-	private_ts->in_self_test = 0;
-
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-	if (g_inspt_crtra_flag != NULL) {
-		kfree(g_inspt_crtra_flag);
-		g_inspt_crtra_flag = NULL;
-	}
-#endif
-
-#ifdef HX_ESD_RECOVERY
-	HX_ESD_RESET_ACTIVATE = 1;
-#endif
-	himax_int_enable(1);/* enable irq */
-
-	return ret;
-}
-
-static void *himax_self_test_seq_start(struct seq_file *s, loff_t *pos)
-{
-	if (*pos >= 1)
-		return NULL;
-
-
-	return (void *)((unsigned long) *pos + 1);
-}
-
-static void *himax_self_test_seq_next(struct seq_file *s, void *v, loff_t *pos)
-{
-	return NULL;
-}
-
-static void himax_self_test_seq_stop(struct seq_file *s, void *v)
-{
-}
-
-static ssize_t himax_self_test_write(struct file *filp, const char __user *buff,
-			size_t len, loff_t *data)
-{
-	char buf[80];
-
-	if (len >= 80) {
-		I("%s: no command exceeds 80 chars.\n", __func__);
-		return -EFAULT;
-	}
-
-	if (copy_from_user(buf, buff, len))
-		return -EFAULT;
-
-	if (buf[0] == 'r') {
-		chip_test_r_flag = true;
-		I("%s: Start to read chip test data.\n", __func__);
-	}	else {
-		chip_test_r_flag = false;
-		I("%s: Back to do self test.\n", __func__);
-	}
-
-	return len;
-}
-
-static int himax_self_test_seq_read(struct seq_file *s, void *v)
-{
-	size_t ret = 0;
-
-	if (chip_test_r_flag) {
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-		if (g_rslt_data)
-			seq_printf(s, "%s", g_rslt_data);
-		else
-#endif
-			seq_puts(s, "No chip test data.\n");
-	} else {
-		himax_self_test(s, v);
-	}
-
-	return ret;
-}
-
-static const struct seq_operations himax_self_test_seq_ops = {
-	.start	= himax_self_test_seq_start,
-	.next	= himax_self_test_seq_next,
-	.stop	= himax_self_test_seq_stop,
-	.show	= himax_self_test_seq_read,
-};
-
-static int himax_self_test_proc_open(struct inode *inode, struct file *file)
-{
-	return seq_open(file, &himax_self_test_seq_ops);
-};
-
-static const struct file_operations himax_proc_self_test_ops = {
-	.owner = THIS_MODULE,
-	.open = himax_self_test_proc_open,
-	.read = seq_read,
-	.write = himax_self_test_write,
-	.release = seq_release,
-};
 #endif
 
 #ifdef HX_HIGH_SENSE
@@ -1014,23 +654,6 @@ int himax_common_proc_init(void)
 		E(" %s: himax_touch_proc_dir file create failed!\n", __func__);
 		return -ENOMEM;
 	}
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-	if (fp_himax_self_test_init != NULL)
-		fp_himax_self_test_init();
-
-	himax_proc_self_test_file = proc_create(HIMAX_PROC_SELF_TEST_FILE, 0664, himax_touch_proc_dir, &himax_proc_self_test_ops);
-	if (himax_proc_self_test_file == NULL) {
-		E(" %s: proc self_test file create failed!\n", __func__);
-		goto fail_1;
-	}
-
-	himax_proc_self_raw_file = proc_create(HIMAX_PROC_SELF_TEST_RAW_FILE, 0444, himax_touch_proc_dir, &himax_proc_self_raw_ops);
-	if (himax_proc_self_raw_file == NULL) {
-		E(" %s: proc self_test raw file create failed!\n", __func__);
-		goto fail_1_1;
-	}
-#endif
-
 #ifdef HX_HIGH_SENSE
 	himax_proc_HSEN_file = proc_create(HIMAX_PROC_HSEN_FILE, 0666,
 									   himax_touch_proc_dir, &himax_proc_HSEN_ops);
@@ -1078,38 +701,28 @@ int himax_common_proc_init(void)
 #endif
 	return 0;
 #ifdef HX_EDGE_LIMIT
-	remove_proc_entry(HIMAX_PROC_EDGE_LIMIT_FILE, himax_touch_proc_dir);
 fail_6:
+	remove_proc_entry(HIMAX_PROC_EDGE_LIMIT_FILE, himax_touch_proc_dir);
 #endif
 #ifdef HX_SMART_WAKEUP
 #ifdef HX_P_SENSOR
-	remove_proc_entry(HIMAX_PROC_PSENSOR_FILE, himax_touch_proc_dir);
 fail_5:
+	remove_proc_entry(HIMAX_PROC_PSENSOR_FILE, himax_touch_proc_dir);
 #endif
-	remove_proc_entry(HIMAX_PROC_GESTURE_FILE, himax_touch_proc_dir);
 fail_4:
-	remove_proc_entry(HIMAX_PROC_SMWP_FILE, himax_touch_proc_dir);
+	remove_proc_entry(HIMAX_PROC_GESTURE_FILE, himax_touch_proc_dir);
 fail_3:
+	remove_proc_entry(HIMAX_PROC_SMWP_FILE, himax_touch_proc_dir);
 #endif
 #ifdef HX_HIGH_SENSE
-	remove_proc_entry(HIMAX_PROC_HSEN_FILE, himax_touch_proc_dir);
 fail_2:
-#endif
-	remove_proc_entry(HIMAX_PROC_SELF_TEST_RAW_FILE, himax_touch_proc_dir);
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-fail_1_1:
-	remove_proc_entry(HIMAX_PROC_SELF_TEST_FILE, himax_touch_proc_dir);
-fail_1:
-	return -ENOMEM;
+	remove_proc_entry(HIMAX_PROC_HSEN_FILE, himax_touch_proc_dir);
 #endif
 	return 0;
 }
 
 void himax_common_proc_deinit(void)
 {
-remove_proc_entry(HIMAX_PROC_SELF_TEST_FILE, himax_touch_proc_dir);
-remove_proc_entry(HIMAX_PROC_SELF_TEST_RAW_FILE, himax_touch_proc_dir);
-
 #ifdef HX_EDGE_LIMIT
 	remove_proc_entry(HIMAX_PROC_EDGE_LIMIT_FILE, himax_touch_proc_dir);
 #endif
@@ -3902,10 +3515,6 @@ void himax_chip_common_deinit(void)
 
 	himax_remove_sysfs(ts);
 	himax_sysfs_touchscreen(ts, false);
-
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-	himax_inspect_data_clear();
-#endif
 
 #ifdef CONFIG_TOUCHSCREEN_HIMAX_DEBUG
 	himax_debug_remove();

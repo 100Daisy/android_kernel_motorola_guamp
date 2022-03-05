@@ -574,11 +574,6 @@ extern struct device *g_device;
 	void	himax_platform_key(void);
 #endif
 
-#ifdef CONFIG_TOUCHSCREEN_HIMAX_INSPECT
-	extern char *g_rslt_data;
-	extern void (*fp_himax_self_test_init)(void);
-#endif
-
 int himax_parse_dt(struct himax_ts_data *ts, struct himax_i2c_platform_data *pdata);
 int himax_report_data(struct himax_ts_data *ts, int ts_path, int ts_status);
 

@@ -44,12 +44,6 @@ config TOUCHSCREEN_HIMAX_DEBUG
 	help
 	  This enables support for HIMAX debug function.
 
-config TOUCHSCREEN_HIMAX_INSPECT
-	bool "HIMAX inspect function"
-	depends on TOUCHSCREEN_HIMAX_SPI
-	help
-	  This enables support for HIMAX debug function.
-
 config HMX_DB
 	bool "HIMAX driver test over Dragon Board"
 	depends on TOUCHSCREEN_HIMAX_SPI

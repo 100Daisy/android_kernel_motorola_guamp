@@ -50,7 +50,6 @@ endif
 himax_v2_mmi-y += himax_common.o
 himax_v2_mmi-$(CONFIG_TOUCHSCREEN_HIMAX_DEBUG) += himax_debug.o
 himax_v2_mmi-$(CONFIG_TOUCHSCREEN_HIMAX_INCELL) += himax_ic_incell_core.o
-himax_v2_mmi-$(CONFIG_TOUCHSCREEN_HIMAX_INSPECT) += himax_inspection.o
 
 obj-$(CONFIG_TOUCHSCREEN_HIMAX_SPI) += himax_v2_mmi.o
 
