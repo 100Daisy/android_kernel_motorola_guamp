@@ -78,7 +78,7 @@ static void *stack_slabs[STACK_ALLOC_MAX_SLABS];
 static int depot_index;
 static int next_slab_inited;
 static size_t depot_offset;
-static DEFINE_RAW_SPINLOCK(depot_lock);
+static DEFINE_SPINLOCK(depot_lock);
 
 static bool init_stack_slab(void **prealloc)
 {
@@ -150,8 +150,7 @@ static struct stack_record *depot_alloc_stack(unsigned long *entries, int size,
 	return stack;
 }
 
-#define STACK_HASH_ORDER 20
-#define STACK_HASH_SIZE (1L << STACK_HASH_ORDER)
+#define STACK_HASH_SIZE (1L << CONFIG_STACK_HASH_ORDER_SHIFT)
 #define STACK_HASH_MASK (STACK_HASH_SIZE - 1)
 #define STACK_HASH_SEED 0x9747b28c
 
@@ -266,7 +265,7 @@ depot_stack_handle_t depot_save_stack(struct stack_trace *trace,
 			prealloc = page_address(page);
 	}
 
-	raw_spin_lock_irqsave(&depot_lock, flags);
+	spin_lock_irqsave(&depot_lock, flags);
 
 	found = find_stack(*bucket, trace->entries, trace->nr_entries, hash);
 	if (!found) {
@@ -290,7 +289,7 @@ depot_stack_handle_t depot_save_stack(struct stack_trace *trace,
 		WARN_ON(!init_stack_slab(&prealloc));
 	}
 
-	raw_spin_unlock_irqrestore(&depot_lock, flags);
+	spin_unlock_irqrestore(&depot_lock, flags);
 exit:
 	if (prealloc) {
 		/* Nobody used this memory, ok to free it. */

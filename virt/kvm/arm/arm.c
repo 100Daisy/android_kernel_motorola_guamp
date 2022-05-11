@@ -382,10 +382,16 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	 * We might get preempted before the vCPU actually runs, but
 	 * over-invalidation doesn't affect correctness.
 	 */
-	if (*last_ran != vcpu->vcpu_id) {
+	if (*last_ran != -1 && *last_ran != vcpu->vcpu_id) {
 		kvm_call_hyp(__kvm_tlb_flush_local_vmid, vcpu);
-		*last_ran = vcpu->vcpu_id;
+
+		/*
+		 * 'last_ran' and this vcpu may share an ASID and hit the
+		 *  conditions for Cortex-A77 erratum 1542418.
+		 */
+		kvm_workaround_1542418_vmid_rollover();
 	}
+	*last_ran = vcpu->vcpu_id;
 
 	vcpu->cpu = cpu;
 	vcpu->arch.host_cpu_context = this_cpu_ptr(&kvm_host_cpu_state);
@@ -470,15 +476,16 @@ bool kvm_arch_vcpu_in_kernel(struct kvm_vcpu *vcpu)
 	return vcpu_mode_priv(vcpu);
 }
 
-/* Just ensure a guest exit from a particular CPU */
-static void exit_vm_noop(void *info)
+static void exit_vmid_rollover(void *info)
 {
+	kvm_workaround_1542418_vmid_rollover();
 }
 
-void force_vm_exit(const cpumask_t *mask)
+static void force_vmid_rollover_exit(const cpumask_t *mask)
 {
 	preempt_disable();
-	smp_call_function_many(mask, exit_vm_noop, NULL, true);
+	smp_call_function_many(mask, exit_vmid_rollover, NULL, true);
+	kvm_workaround_1542418_vmid_rollover();
 	preempt_enable();
 }
 
@@ -536,10 +543,10 @@ static void update_vttbr(struct kvm *kvm)
 
 		/*
 		 * On SMP we know no other CPUs can use this CPU's or each
-		 * other's VMID after force_vm_exit returns since the
+		 * other's VMID after force_vmid_rollover_exit returns since the
 		 * kvm_vmid_lock blocks them from reentry to the guest.
 		 */
-		force_vm_exit(cpu_all_mask);
+		force_vmid_rollover_exit(cpu_all_mask);
 		/*
 		 * Now broadcast TLB + ICACHE invalidation over the inner
 		 * shareable domain to make sure all data structures are
@@ -573,8 +580,6 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 		return 0;
 
 	vcpu->arch.has_run_once = true;
-
-	kvm_arm_vcpu_init_debug(vcpu);
 
 	if (likely(irqchip_in_kernel(kvm))) {
 		/*
@@ -1136,14 +1141,6 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 		r = -EFAULT;
 		if (copy_from_user(&reg, argp, sizeof(reg)))
 			break;
-
-		/*
-		 * We could owe a reset due to PSCI. Handle the pending reset
-		 * here to ensure userspace register accesses are ordered after
-		 * the reset.
-		 */
-		if (kvm_check_request(KVM_REQ_VCPU_RESET, vcpu))
-			kvm_reset_vcpu(vcpu);
 
 		if (ioctl == KVM_SET_ONE_REG)
 			r = kvm_arm_set_reg(vcpu, &reg);
