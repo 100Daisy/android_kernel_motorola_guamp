@@ -464,6 +464,13 @@ config CHARGER_GPIO
 	  This driver can be build as a module. If so, the module will be
 	  called gpio-charger.
 
+config BAT_NTC_10K
+	bool "for ntc 10k"
+	default n
+	help
+	  Say Y to enable
+	  for battery ntc 10k
+
 config CHARGER_MANAGER
 	bool "Battery charger manager for multiple chargers"
 	depends on REGULATOR
@@ -621,8 +628,7 @@ config BATTERY_GOLDFISH
 
 config BATTERY_RT5033
 	tristate "RT5033 fuel gauge support"
-	depends on I2C
-	select REGMAP_I2C
+	depends on MFD_RT5033
 	help
 	  This adds support for battery fuel gauge in Richtek RT5033 PMIC.
 	  The fuelgauge calculates and determines the battery state of charge
@@ -645,5 +651,7 @@ config CHARGER_CROS_USBPD
 	  driver. This driver gets various bits of information about
 	  what is connected to USB PD ports from the EC and converts
 	  that into power_supply properties.
+
+source "drivers/power/supply/qcom/Kconfig"
 
 endif # POWER_SUPPLY
