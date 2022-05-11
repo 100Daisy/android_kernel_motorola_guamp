@@ -15,7 +15,7 @@ git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linu
 git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b android11-release binutils-32
 
 # Clone AnyKernel3
-git clone --depth=1 https://github.com/100Daisy/AnyKernel3 -b guamp
+git clone --depth=1 https://github.com/100Daisy/AnyKernel3 -b guamp-ack
 
 # Export the PATH variable
 export PATH="$(pwd)/clang/bin:$(pwd)/binutils/bin:$(pwd)/binutils-32/bin:$PATH"
@@ -46,7 +46,7 @@ zip_kernelimage() {
     rm -rf AnyKernel3/*.zip
     BUILD_TIME=$(date +"%d%m%Y-%H%M")
     cd AnyKernel3
-    KERNEL_NAME=guampstock-"${BUILD_TIME}"
+    KERNEL_NAME=ACK-DaisyKernel-guamp-"${BUILD_TIME}"
     zip -r9 "$KERNEL_NAME".zip ./*
     cd ..
 }
