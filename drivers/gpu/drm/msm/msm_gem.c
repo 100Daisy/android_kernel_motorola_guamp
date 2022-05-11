@@ -965,7 +965,7 @@ static struct drm_gem_object *_msm_gem_new(struct drm_device *dev,
 
 	ret = msm_gem_new_impl(dev, size, flags, NULL, &obj, struct_mutex_locked);
 	if (ret)
-		return ERR_PTR(ret);
+		goto fail;
 
 	if (use_vram) {
 		struct msm_gem_vma *vma;
@@ -1035,7 +1035,7 @@ struct drm_gem_object *msm_gem_import(struct drm_device *dev,
 
 	ret = msm_gem_new_impl(dev, size, MSM_BO_WC, dmabuf->resv, &obj, false);
 	if (ret)
-		return ERR_PTR(ret);
+		goto fail;
 
 	drm_gem_private_object_init(dev, obj, size);
 
@@ -1044,14 +1044,16 @@ struct drm_gem_object *msm_gem_import(struct drm_device *dev,
 	msm_obj = to_msm_bo(obj);
 	mutex_lock(&msm_obj->lock);
 	msm_obj->sgt = sgt;
-	msm_obj->pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
+	msm_obj->pages = kvmalloc_array(npages, sizeof(struct page *),
+							GFP_KERNEL);
 	if (!msm_obj->pages) {
 		mutex_unlock(&msm_obj->lock);
 		ret = -ENOMEM;
 		goto fail;
 	}
 
-	ret = drm_prime_sg_to_page_addr_arrays(sgt, msm_obj->pages, NULL, npages);
+	ret = drm_prime_sg_to_page_addr_arrays(sgt, msm_obj->pages, NULL,
+						npages);
 	if (ret) {
 		mutex_unlock(&msm_obj->lock);
 		goto fail;
