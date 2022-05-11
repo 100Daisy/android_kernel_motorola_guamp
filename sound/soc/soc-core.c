@@ -154,7 +154,7 @@ static void soc_init_component_debugfs(struct snd_soc_component *component)
 	}
 
 	if (!component->debugfs_root) {
-		dev_warn(component->dev,
+		dev_dbg(component->dev,
 			"ASoC: Failed to create component debugfs directory\n");
 		return;
 	}
@@ -732,6 +732,12 @@ struct snd_soc_component *soc_find_component(
 	const struct device_node *of_node, const char *name)
 {
 	struct snd_soc_component *component;
+
+	if (!of_node && !name) {
+		pr_err("%s: Either of_node or name must be valid\n",
+			__func__);
+		return NULL;
+	}
 
 	lockdep_assert_held(&client_mutex);
 
@@ -3331,9 +3337,10 @@ EXPORT_SYMBOL_GPL(snd_soc_lookup_component);
  */
 void snd_soc_card_change_online_state(struct snd_soc_card *soc_card, int online)
 {
-	snd_card_change_online_state(soc_card->snd_card, online);
+	if (soc_card && soc_card->snd_card)
+		snd_card_change_online_state(soc_card->snd_card, online);
 }
-EXPORT_SYMBOL_GPL(snd_soc_card_change_online_state);
+EXPORT_SYMBOL(snd_soc_card_change_online_state);
 
 /* Retrieve a card's name from device tree */
 int snd_soc_of_parse_card_name(struct snd_soc_card *card,
@@ -3555,7 +3562,7 @@ int snd_soc_of_parse_audio_routing(struct snd_soc_card *card,
 	if (!routes) {
 		dev_err(card->dev,
 			"ASoC: Could not allocate DAPM route table\n");
-		return -ENOMEM;
+		return -EINVAL;
 	}
 
 	for (i = 0; i < num_routes; i++) {
@@ -3785,7 +3792,7 @@ int snd_soc_get_dai_name(struct of_phandle_args *args,
 		if (!component_of_node && pos->dev->parent)
 			component_of_node = pos->dev->parent->of_node;
 
-		if (component_of_node != args->np || !pos->num_dai)
+		if (component_of_node != args->np)
 			continue;
 
 		if (pos->driver->of_xlate_dai_name) {

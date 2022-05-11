@@ -500,10 +500,9 @@ static void snd_timer_notify1(struct snd_timer_instance *ti, int event)
 		return;
 	if (timer->hw.flags & SNDRV_TIMER_HW_SLAVE)
 		return;
-	event += 10; /* convert to SNDRV_TIMER_EVENT_MXXX */
 	list_for_each_entry(ts, &ti->slave_active_head, active_list)
 		if (ts->ccallback)
-			ts->ccallback(ts, event, &tstamp, resolution);
+			ts->ccallback(ts, event + 100, &tstamp, resolution);
 }
 
 /* start/continue a master timer */
@@ -593,13 +592,13 @@ static int snd_timer_stop1(struct snd_timer_instance *timeri, bool stop)
 	if (!timer)
 		return -EINVAL;
 	spin_lock_irqsave(&timer->lock, flags);
-	list_del_init(&timeri->ack_list);
-	list_del_init(&timeri->active_list);
 	if (!(timeri->flags & (SNDRV_TIMER_IFLG_RUNNING |
 			       SNDRV_TIMER_IFLG_START))) {
 		result = -EBUSY;
 		goto unlock;
 	}
+	list_del_init(&timeri->ack_list);
+	list_del_init(&timeri->active_list);
 	if (timer->card && timer->card->shutdown)
 		goto unlock;
 	if (stop) {
@@ -634,22 +633,23 @@ static int snd_timer_stop1(struct snd_timer_instance *timeri, bool stop)
 static int snd_timer_stop_slave(struct snd_timer_instance *timeri, bool stop)
 {
 	unsigned long flags;
-	bool running;
 
 	spin_lock_irqsave(&slave_active_lock, flags);
-	running = timeri->flags & SNDRV_TIMER_IFLG_RUNNING;
+	if (!(timeri->flags & SNDRV_TIMER_IFLG_RUNNING)) {
+		spin_unlock_irqrestore(&slave_active_lock, flags);
+		return -EBUSY;
+	}
 	timeri->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
 	if (timeri->timer) {
 		spin_lock(&timeri->timer->lock);
 		list_del_init(&timeri->ack_list);
 		list_del_init(&timeri->active_list);
-		if (running)
-			snd_timer_notify1(timeri, stop ? SNDRV_TIMER_EVENT_STOP :
-					  SNDRV_TIMER_EVENT_PAUSE);
+		snd_timer_notify1(timeri, stop ? SNDRV_TIMER_EVENT_STOP :
+				  SNDRV_TIMER_EVENT_PAUSE);
 		spin_unlock(&timeri->timer->lock);
 	}
 	spin_unlock_irqrestore(&slave_active_lock, flags);
-	return running ? 0 : -EBUSY;
+	return 0;
 }
 
 /*
@@ -1210,7 +1210,11 @@ static void snd_timer_proc_read(struct snd_info_entry *entry,
 
 	mutex_lock(&register_mutex);
 	list_for_each_entry(timer, &snd_timer_list, device_list) {
-		if (timer->card && timer->card->shutdown)
+		if (timer->card == NULL) {
+			pr_debug("%s: timer->card is NULL\n", __func__);
+			continue;
+		}
+		if (timer->card->shutdown)
 			continue;
 		switch (timer->tmr_class) {
 		case SNDRV_TIMER_CLASS_GLOBAL:
@@ -1380,6 +1384,7 @@ static void snd_timer_user_tinterrupt(struct snd_timer_instance *timeri,
 	}
 	if ((tu->filter & (1 << SNDRV_TIMER_EVENT_RESOLUTION)) &&
 	    tu->last_resolution != resolution) {
+		memset(&r1, 0, sizeof(r1));
 		r1.event = SNDRV_TIMER_EVENT_RESOLUTION;
 		r1.tstamp = tstamp;
 		r1.val = resolution;

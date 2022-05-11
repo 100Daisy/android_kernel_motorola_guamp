@@ -75,8 +75,7 @@ static int dapm_up_seq[] = {
 	[snd_soc_dapm_dai_link] = 2,
 	[snd_soc_dapm_dai_in] = 4,
 	[snd_soc_dapm_dai_out] = 4,
-	[snd_soc_dapm_aif_in] = 4,
-	[snd_soc_dapm_aif_out] = 4,
+	[snd_soc_dapm_adc] = 4,
 	[snd_soc_dapm_mic] = 5,
 	[snd_soc_dapm_siggen] = 5,
 	[snd_soc_dapm_input] = 5,
@@ -88,6 +87,8 @@ static int dapm_up_seq[] = {
 	[snd_soc_dapm_mixer] = 8,
 	[snd_soc_dapm_mixer_named_ctl] = 8,
 	[snd_soc_dapm_pga] = 9,
+	[snd_soc_dapm_aif_in] = 9,
+	[snd_soc_dapm_aif_out] = 9,
 	[snd_soc_dapm_buffer] = 9,
 	[snd_soc_dapm_scheduler] = 9,
 	[snd_soc_dapm_effect] = 9,
@@ -95,7 +96,6 @@ static int dapm_up_seq[] = {
 	[snd_soc_dapm_asrc] = 9,
 	[snd_soc_dapm_encoder] = 9,
 	[snd_soc_dapm_decoder] = 9,
-	[snd_soc_dapm_adc] = 10,
 	[snd_soc_dapm_out_drv] = 11,
 	[snd_soc_dapm_hp] = 11,
 	[snd_soc_dapm_spk] = 11,
@@ -108,7 +108,9 @@ static int dapm_up_seq[] = {
 static int dapm_down_seq[] = {
 	[snd_soc_dapm_pre] = 0,
 	[snd_soc_dapm_kcontrol] = 1,
-	[snd_soc_dapm_adc] = 2,
+	[snd_soc_dapm_aif_in] = 2,
+	[snd_soc_dapm_aif_out] = 2,
+	[snd_soc_dapm_adc] = 5,
 	[snd_soc_dapm_hp] = 3,
 	[snd_soc_dapm_spk] = 3,
 	[snd_soc_dapm_line] = 3,
@@ -134,8 +136,6 @@ static int dapm_down_seq[] = {
 	[snd_soc_dapm_vmid] = 8,
 	[snd_soc_dapm_mux] = 9,
 	[snd_soc_dapm_demux] = 9,
-	[snd_soc_dapm_aif_in] = 10,
-	[snd_soc_dapm_aif_out] = 10,
 	[snd_soc_dapm_dai_in] = 10,
 	[snd_soc_dapm_dai_out] = 10,
 	[snd_soc_dapm_dai_link] = 11,
@@ -303,6 +303,8 @@ void dapm_mark_endpoints_dirty(struct snd_soc_card *card)
 	mutex_lock(&card->dapm_mutex);
 
 	list_for_each_entry(w, &card->widgets, list) {
+		if (w->ignore_suspend)
+			continue;
 		if (w->is_ep) {
 			dapm_mark_dirty(w, "Rechecking endpoints");
 			if (w->is_ep & SND_SOC_DAPM_EP_SINK)
@@ -779,7 +781,7 @@ static void dapm_set_mixer_path_status(struct snd_soc_dapm_path *p, int i,
 	unsigned int max = mc->max;
 	unsigned int mask = (1 << fls(max)) - 1;
 	unsigned int invert = mc->invert;
-	unsigned int val;
+	unsigned int val = 0;
 
 	if (reg != SND_SOC_NOPM) {
 		soc_dapm_read(p->sink->dapm, reg, &val);
@@ -1635,7 +1637,8 @@ static void dapm_seq_run(struct snd_soc_card *card,
 		switch (w->id) {
 		case snd_soc_dapm_pre:
 			if (!w->event)
-				continue;
+				list_for_each_entry_safe_continue(w, n, list,
+								  power_list);
 
 			if (event == SND_SOC_DAPM_STREAM_START)
 				ret = w->event(w,
@@ -1647,7 +1650,8 @@ static void dapm_seq_run(struct snd_soc_card *card,
 
 		case snd_soc_dapm_post:
 			if (!w->event)
-				continue;
+				list_for_each_entry_safe_continue(w, n, list,
+								  power_list);
 
 			if (event == SND_SOC_DAPM_STREAM_START)
 				ret = w->event(w,
@@ -1666,6 +1670,13 @@ static void dapm_seq_run(struct snd_soc_card *card,
 			list_move(&w->power_list, &pending);
 			break;
 		}
+
+		/*
+		 * Add this debug log to keep track of widgets being
+		 * powered-up and powered-down.
+		 */
+		dev_dbg(w->dapm->dev, "dapm: powering %s widget %s\n",
+			power_up ? "up" : "down", w->name);
 
 		if (ret < 0)
 			dev_err(w->dapm->dev,
@@ -1996,7 +2007,7 @@ static int dapm_power_widgets(struct snd_soc_card *card, int event)
 	dapm_pre_sequence_async(&card->dapm, 0);
 	/* Run other bias changes in parallel */
 	list_for_each_entry(d, &card->dapm_list, list) {
-		if (d != &card->dapm)
+		if (d != &card->dapm && d->bias_level != d->target_bias_level)
 			async_schedule_domain(dapm_pre_sequence_async, d,
 						&async_domain);
 	}
@@ -2020,7 +2031,7 @@ static int dapm_power_widgets(struct snd_soc_card *card, int event)
 
 	/* Run all the bias changes in parallel */
 	list_for_each_entry(d, &card->dapm_list, list) {
-		if (d != &card->dapm)
+		if (d != &card->dapm && d->bias_level != d->target_bias_level)
 			async_schedule_domain(dapm_post_sequence_async, d,
 						&async_domain);
 	}
@@ -2454,7 +2465,6 @@ void snd_soc_dapm_free_widget(struct snd_soc_dapm_widget *w)
 	enum snd_soc_dapm_direction dir;
 
 	list_del(&w->list);
-	list_del(&w->dirty);
 	/*
 	 * remove source and sink paths associated to this widget.
 	 * While removing the path, remove reference to it from both
@@ -2511,16 +2521,10 @@ static struct snd_soc_dapm_widget *dapm_find_widget(
 	return NULL;
 }
 
-/*
- * set the DAPM pin status:
- * returns 1 when the value has been updated, 0 when unchanged, or a negative
- * error code; called from kcontrol put callback
- */
-static int __snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
-				  const char *pin, int status)
+static int snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
+				const char *pin, int status)
 {
 	struct snd_soc_dapm_widget *w = dapm_find_widget(dapm, pin, true);
-	int ret = 0;
 
 	dapm_assert_locked(dapm);
 
@@ -2533,26 +2537,13 @@ static int __snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
 		dapm_mark_dirty(w, "pin configuration");
 		dapm_widget_invalidate_input_paths(w);
 		dapm_widget_invalidate_output_paths(w);
-		ret = 1;
 	}
 
 	w->connected = status;
 	if (status == 0)
 		w->force = 0;
 
-	return ret;
-}
-
-/*
- * similar as __snd_soc_dapm_set_pin(), but returns 0 when successful;
- * called from several API functions below
- */
-static int snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
-				const char *pin, int status)
-{
-	int ret = __snd_soc_dapm_set_pin(dapm, pin, status);
-
-	return ret < 0 ? ret : 0;
+	return 0;
 }
 
 /**
@@ -2796,8 +2787,7 @@ static int snd_soc_dapm_add_path(struct snd_soc_dapm_context *dapm,
 		dapm_mark_dirty(widgets[dir], "Route added");
 	}
 
-	if (dapm->card->instantiated && path->connect)
-		dapm_path_invalidate(path);
+	dapm_path_invalidate(path);
 
 	return 0;
 err:
@@ -3480,15 +3470,14 @@ int snd_soc_dapm_put_pin_switch(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_card *card = snd_kcontrol_chip(kcontrol);
 	const char *pin = (const char *)kcontrol->private_value;
-	int ret;
 
-	mutex_lock_nested(&card->dapm_mutex, SND_SOC_DAPM_CLASS_RUNTIME);
-	ret = __snd_soc_dapm_set_pin(&card->dapm, pin,
-				     !!ucontrol->value.integer.value[0]);
-	mutex_unlock(&card->dapm_mutex);
+	if (ucontrol->value.integer.value[0])
+		snd_soc_dapm_enable_pin(&card->dapm, pin);
+	else
+		snd_soc_dapm_disable_pin(&card->dapm, pin);
 
 	snd_soc_dapm_sync(&card->dapm);
-	return ret;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_soc_dapm_put_pin_switch);
 
@@ -3878,7 +3867,7 @@ static int snd_soc_dapm_dai_link_put(struct snd_kcontrol *kcontrol,
 
 	w->params_select = ucontrol->value.enumerated.item[0];
 
-	return 1;
+	return 0;
 }
 
 static void

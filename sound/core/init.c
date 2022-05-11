@@ -58,6 +58,8 @@ static char *slots[SNDRV_CARDS];
 module_param_array(slots, charp, NULL, 0444);
 MODULE_PARM_DESC(slots, "Module names assigned to the slots.");
 
+#define SND_CARD_STATE_MAX_LEN 16
+
 /* return non-zero if the given index is reserved for the given
  * module via slots option
  */
@@ -107,9 +109,39 @@ static void snd_card_id_read(struct snd_info_entry *entry,
 	snd_iprintf(buffer, "%s\n", entry->card->id);
 }
 
+static ssize_t snd_card_state_read(struct snd_info_entry *entry,
+			       void *file_private_data, struct file *file,
+			       char __user *buf, size_t count, loff_t pos)
+{
+	int len;
+	char buffer[SND_CARD_STATE_MAX_LEN];
+
+	/* make sure offline is updated prior to wake up */
+	rmb();
+	len = snprintf(buffer, sizeof(buffer), "%s\n",
+		       entry->card->offline ? "OFFLINE" : "ONLINE");
+	return simple_read_from_buffer(buf, count, &pos, buffer, len);
+}
+
+static unsigned int snd_card_state_poll(struct snd_info_entry *entry,
+					void *private_data, struct file *file,
+					poll_table *wait)
+{
+	poll_wait(file, &entry->card->offline_poll_wait, wait);
+	if (xchg(&entry->card->offline_change, 0))
+		return POLLIN | POLLPRI | POLLRDNORM;
+	else
+		return 0;
+}
+
+static struct snd_info_entry_ops snd_card_state_proc_ops = {
+	.read = snd_card_state_read,
+	.poll = snd_card_state_poll,
+};
+
 static int init_info_for_card(struct snd_card *card)
 {
-	struct snd_info_entry *entry;
+	struct snd_info_entry *entry, *entry_state;
 
 	entry = snd_info_create_card_entry(card, "id", card->proc_root);
 	if (!entry) {
@@ -118,6 +150,17 @@ static int init_info_for_card(struct snd_card *card)
 	}
 	entry->c.text.read = snd_card_id_read;
 	card->proc_id = entry;
+
+	entry_state = snd_info_create_card_entry(card, "state",
+						 card->proc_root);
+	if (!entry_state) {
+		dev_dbg(card->dev, "unable to create card entry state\n");
+		card->proc_id = NULL;
+		return -ENOMEM;
+	}
+	entry_state->size = SND_CARD_STATE_MAX_LEN;
+	entry_state->content = SNDRV_INFO_CONTENT_DATA;
+	entry_state->c.ops = &snd_card_state_proc_ops;
 
 	return snd_info_card_register(card);
 }
@@ -406,8 +449,10 @@ int snd_card_disconnect(struct snd_card *card)
 		return 0;
 	}
 	card->shutdown = 1;
+	spin_unlock(&card->files_lock);
 
 	/* replace file->f_op with special dummy operations */
+	spin_lock(&card->files_lock);
 	list_for_each_entry(mfile, &card->files_list, list) {
 		/* it's critical part, use endless loop */
 		/* we have no room to fail */
@@ -1016,7 +1061,17 @@ void snd_card_change_online_state(struct snd_card *card, int online)
 	xchg(&card->offline_change, 1);
 	wake_up_interruptible(&card->offline_poll_wait);
 }
-EXPORT_SYMBOL_GPL(snd_card_change_online_state);
+EXPORT_SYMBOL(snd_card_change_online_state);
+
+/**
+ * snd_card_is_online_state - return true if card is online state
+ * @card: Card to query
+ */
+bool snd_card_is_online_state(struct snd_card *card)
+{
+	return !card->offline;
+}
+EXPORT_SYMBOL(snd_card_is_online_state);
 
 #ifdef CONFIG_PM
 /**
