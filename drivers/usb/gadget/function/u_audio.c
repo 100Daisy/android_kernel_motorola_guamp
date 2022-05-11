@@ -89,12 +89,7 @@ static void u_audio_iso_complete(struct usb_ep *ep, struct usb_request *req)
 	struct snd_uac_chip *uac = prm->uac;
 
 	/* i/f shutting down */
-	if (!prm->ep_enabled) {
-		usb_ep_free_request(ep, req);
-		return;
-	}
-
-	if (req->status == -ESHUTDOWN)
+	if (!prm->ep_enabled || req->status == -ESHUTDOWN)
 		return;
 
 	/*
@@ -349,28 +344,23 @@ static inline void free_ep(struct uac_rtd_params *prm, struct usb_ep *ep)
 	if (!prm->ep_enabled)
 		return;
 
+	prm->ep_enabled = false;
+
 	audio_dev = uac->audio_dev;
 	params = &audio_dev->params;
 
 	for (i = 0; i < params->req_number; i++) {
 		if (prm->ureq[i].req) {
-			if (usb_ep_dequeue(ep, prm->ureq[i].req))
-				usb_ep_free_request(ep, prm->ureq[i].req);
-			/*
-			 * If usb_ep_dequeue() cannot successfully dequeue the
-			 * request, the request will be freed by the completion
-			 * callback.
-			 */
-
+			usb_ep_dequeue(ep, prm->ureq[i].req);
+			usb_ep_free_request(ep, prm->ureq[i].req);
 			prm->ureq[i].req = NULL;
 		}
 	}
 
-	prm->ep_enabled = false;
-
 	if (usb_ep_disable(ep))
 		dev_err(uac->card->dev, "%s:%d Error!\n", __func__, __LINE__);
 }
+
 
 int u_audio_start_capture(struct g_audio *audio_dev)
 {
@@ -381,11 +371,14 @@ int u_audio_start_capture(struct g_audio *audio_dev)
 	struct usb_ep *ep;
 	struct uac_rtd_params *prm;
 	struct uac_params *params = &audio_dev->params;
-	int req_len, i;
+	int req_len, i, ret;
 
 	ep = audio_dev->out_ep;
 	prm = &uac->c_prm;
-	config_ep_by_speed(gadget, &audio_dev->func, ep);
+	ret = config_ep_by_speed(gadget, &audio_dev->func, ep);
+	if (ret)
+		return ret;
+
 	req_len = prm->max_psize;
 
 	prm->ep_enabled = true;
@@ -434,11 +427,13 @@ int u_audio_start_playback(struct g_audio *audio_dev)
 	struct uac_params *params = &audio_dev->params;
 	unsigned int factor, rate;
 	const struct usb_endpoint_descriptor *ep_desc;
-	int req_len, i;
+	int req_len, i, ret;
 
 	ep = audio_dev->in_ep;
 	prm = &uac->p_prm;
-	config_ep_by_speed(gadget, &audio_dev->func, ep);
+	ret = config_ep_by_speed(gadget, &audio_dev->func, ep);
+	if (ret)
+		return ret;
 
 	ep_desc = ep->desc;
 

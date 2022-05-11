@@ -20,6 +20,12 @@ struct f_ncm_opts {
 	struct net_device		*net;
 	bool				bound;
 
+	/* Begin MOTODESK-2239 Add OS descriptor support. suzh1 2021-02-05 */
+	struct config_group		*ncm_interf_group;
+	struct usb_os_desc		ncm_os_desc;
+	char				ncm_ext_compat_id[16];
+	/* End MOTODESK-2239 */
+
 	/*
 	 * Read/write access to configfs attributes is handled by configfs.
 	 *
@@ -29,5 +35,9 @@ struct f_ncm_opts {
 	struct mutex			lock;
 	int				refcnt;
 };
+
+extern struct device *create_function_device(char *name);
+int ncm_ctrlrequest(struct usb_composite_dev *cdev,
+		const struct usb_ctrlrequest *ctrl);
 
 #endif /* U_NCM_H */
