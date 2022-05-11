@@ -588,13 +588,9 @@ static struct mt_report_data *mt_allocate_report_data(struct mt_device *td,
 		if (!(HID_MAIN_ITEM_VARIABLE & field->flags))
 			continue;
 
-		if (field->logical == HID_DG_FINGER || td->hdev->group != HID_GROUP_MULTITOUCH_WIN_8) {
-			for (n = 0; n < field->report_count; n++) {
-				if (field->usage[n].hid == HID_DG_CONTACTID) {
-					rdata->is_mt_collection = true;
-					break;
-				}
-			}
+		for (n = 0; n < field->report_count; n++) {
+			if (field->usage[n].hid == HID_DG_CONTACTID)
+				rdata->is_mt_collection = true;
 		}
 	}
 

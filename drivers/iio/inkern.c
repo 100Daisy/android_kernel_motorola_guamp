@@ -591,50 +591,28 @@ EXPORT_SYMBOL_GPL(iio_read_channel_average_raw);
 static int iio_convert_raw_to_processed_unlocked(struct iio_channel *chan,
 	int raw, int *processed, unsigned int scale)
 {
-	int scale_type, scale_val, scale_val2;
-	int offset_type, offset_val, offset_val2;
+	int scale_type, scale_val, scale_val2, offset;
 	s64 raw64 = raw;
+	int ret;
 
-	offset_type = iio_channel_read(chan, &offset_val, &offset_val2,
-				       IIO_CHAN_INFO_OFFSET);
-	if (offset_type >= 0) {
-		switch (offset_type) {
-		case IIO_VAL_INT:
-			break;
-		case IIO_VAL_INT_PLUS_MICRO:
-		case IIO_VAL_INT_PLUS_NANO:
-			/*
-			 * Both IIO_VAL_INT_PLUS_MICRO and IIO_VAL_INT_PLUS_NANO
-			 * implicitely truncate the offset to it's integer form.
-			 */
-			break;
-		case IIO_VAL_FRACTIONAL:
-			offset_val /= offset_val2;
-			break;
-		case IIO_VAL_FRACTIONAL_LOG2:
-			offset_val >>= offset_val2;
-			break;
-		default:
-			return -EINVAL;
-		}
-
-		raw64 += offset_val;
-	}
+	ret = iio_channel_read(chan, &offset, NULL, IIO_CHAN_INFO_OFFSET);
+	if (ret >= 0)
+		raw64 += offset;
 
 	scale_type = iio_channel_read(chan, &scale_val, &scale_val2,
 					IIO_CHAN_INFO_SCALE);
 	if (scale_type < 0) {
 		/*
-		 * If no channel scaling is available apply consumer scale to
-		 * raw value and return.
+		 * Just pass raw values as processed if no scaling is
+		 * available.
 		 */
-		*processed = raw * scale;
+		*processed = raw;
 		return 0;
 	}
 
 	switch (scale_type) {
 	case IIO_VAL_INT:
-		*processed = raw64 * scale_val * scale;
+		*processed = raw64 * scale_val;
 		break;
 	case IIO_VAL_INT_PLUS_MICRO:
 		if (scale_val2 < 0)
@@ -956,3 +934,21 @@ ssize_t iio_write_channel_ext_info(struct iio_channel *chan, const char *attr,
 			       chan->channel, buf, len);
 }
 EXPORT_SYMBOL_GPL(iio_write_channel_ext_info);
+
+int iio_write_channel_processed(struct iio_channel *chan, int val)
+{
+	int ret;
+
+	mutex_lock(&chan->indio_dev->info_exist_lock);
+	if (chan->indio_dev->info == NULL) {
+		ret = -ENODEV;
+		goto err_unlock;
+	}
+
+	ret = iio_channel_write(chan, val, 0, IIO_CHAN_INFO_PROCESSED);
+err_unlock:
+	mutex_unlock(&chan->indio_dev->info_exist_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(iio_write_channel_processed);

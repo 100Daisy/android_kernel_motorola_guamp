@@ -148,7 +148,6 @@ config HID_APPLEIR
 
 config HID_ASUS
 	tristate "Asus"
-	depends on USB_HID
 	depends on LEDS_CLASS
 	---help---
 	Support for Asus notebook built-in keyboard and touchpad via i2c, and
@@ -192,14 +191,14 @@ config HID_CHERRY
 
 config HID_CHICONY
 	tristate "Chicony devices"
-	depends on USB_HID
+	depends on HID
 	default !EXPERT
 	---help---
 	Support for Chicony Tactical pad and special keys on Chicony keyboards.
 
 config HID_CORSAIR
 	tristate "Corsair devices"
-	depends on USB_HID && LEDS_CLASS
+	depends on HID && USB && LEDS_CLASS
 	---help---
 	Support for Corsair devices that are not fully compliant with the
 	HID standard.
@@ -220,7 +219,7 @@ config HID_COUGAR
 
 config HID_PRODIKEYS
 	tristate "Prodikeys PC-MIDI Keyboard support"
-	depends on USB_HID && SND
+	depends on HID && SND
 	select SND_RAWMIDI
 	---help---
 	Support for Prodikeys PC-MIDI Keyboard device support.
@@ -485,7 +484,7 @@ config HID_LENOVO
 
 config HID_LOGITECH
 	tristate "Logitech devices"
-	depends on USB_HID
+	depends on HID
 	default !EXPERT
 	---help---
 	Support for Logitech devices that are not fully compliant with HID standard.
@@ -834,7 +833,7 @@ config HID_SAITEK
 
 config HID_SAMSUNG
 	tristate "Samsung InfraRed remote control or keyboards"
-	depends on USB_HID
+	depends on HID
 	---help---
 	Support for Samsung InfraRed remote control or keyboards.
 
@@ -1090,6 +1089,15 @@ config HID_ALPS
 	Support for Alps I2C HID touchpads and StickPointer.
 	Say Y here if you have a Alps touchpads over i2c-hid or usbhid
 	and want support for its special functionalities.
+
+config HID_QVR
+	tristate "QVR support"
+	depends on HID
+	help
+	Support for streaming sensor data from an external device and to
+	retrieve the calibration data of the associated device.
+	Say 'Y' or 'M' if you want to connect an external device to
+	stream sensor data for QVR support.
 
 endmenu
 

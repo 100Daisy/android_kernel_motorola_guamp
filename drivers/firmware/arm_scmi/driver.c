@@ -48,6 +48,7 @@ enum scmi_error_codes {
 	SCMI_ERR_GENERIC = -8,	/* Generic Error */
 	SCMI_ERR_HARDWARE = -9,	/* Hardware Error */
 	SCMI_ERR_PROTOCOL = -10,/* Protocol Error */
+	SCMI_ERR_MAX
 };
 
 /* List of all SCMI devices active in system */
@@ -167,10 +168,8 @@ static const int scmi_linux_errmap[] = {
 
 static inline int scmi_to_linux_errno(int errno)
 {
-	int err_idx = -errno;
-
-	if (err_idx >= SCMI_SUCCESS && err_idx < ARRAY_SIZE(scmi_linux_errmap))
-		return scmi_linux_errmap[err_idx];
+	if (errno < SCMI_SUCCESS && errno > SCMI_ERR_MAX)
+		return scmi_linux_errmap[-errno];
 	return -EIO;
 }
 
@@ -629,9 +628,8 @@ static int scmi_xfer_info_init(struct scmi_info *sinfo)
 	struct scmi_xfers_info *info = &sinfo->minfo;
 
 	/* Pre-allocated messages, no more than what hdr.seq can support */
-	if (WARN_ON(!desc->max_msg || desc->max_msg > MSG_TOKEN_MAX)) {
-		dev_err(dev,
-			"Invalid maximum messages %d, not in range [1 - %lu]\n",
+	if (WARN_ON(desc->max_msg >= MSG_TOKEN_MAX)) {
+		dev_err(dev, "Maximum message of %d exceeds supported %ld\n",
 			desc->max_msg, MSG_TOKEN_MAX);
 		return -EINVAL;
 	}
@@ -873,7 +871,7 @@ static struct platform_driver scmi_driver = {
 
 module_platform_driver(scmi_driver);
 
-MODULE_ALIAS("platform:arm-scmi");
+MODULE_ALIAS("platform: arm-scmi");
 MODULE_AUTHOR("Sudeep Holla <sudeep.holla@arm.com>");
 MODULE_DESCRIPTION("ARM SCMI protocol driver");
 MODULE_LICENSE("GPL v2");

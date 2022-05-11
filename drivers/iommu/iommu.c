@@ -31,6 +31,7 @@
 #include <linux/err.h>
 #include <linux/pci.h>
 #include <linux/bitops.h>
+#include <linux/debugfs.h>
 #include <linux/property.h>
 #include <trace/events/iommu.h>
 
@@ -101,6 +102,29 @@ int iommu_device_register(struct iommu_device *iommu)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(iommu_device_register);
+
+#ifdef CONFIG_ARM_SMMU_SELFTEST
+struct iommu_device *get_iommu_by_fwnode(struct fwnode_handle *fwnode)
+{
+	struct iommu_device *iommu;
+
+	spin_lock(&iommu_device_lock);
+	list_for_each_entry(iommu, &iommu_device_list, list) {
+		if (iommu->fwnode == fwnode) {
+			spin_unlock(&iommu_device_lock);
+			return iommu;
+		}
+	}
+	spin_unlock(&iommu_device_lock);
+
+	return NULL;
+}
+#else
+struct iommu_device *get_iommu_by_fwnode(struct fwnode_handle *fwnode)
+{
+	return NULL;
+}
+#endif
 
 void iommu_device_unregister(struct iommu_device *iommu)
 {
@@ -634,6 +658,7 @@ rename:
 	mutex_unlock(&group->mutex);
 	if (ret)
 		goto err_put_group;
+
 
 	/* Notify any listeners about change to group. */
 	blocking_notifier_call_chain(&group->notifier,
@@ -1513,12 +1538,12 @@ phys_addr_t iommu_iova_to_phys(struct iommu_domain *domain, dma_addr_t iova)
 EXPORT_SYMBOL_GPL(iommu_iova_to_phys);
 
 phys_addr_t iommu_iova_to_phys_hard(struct iommu_domain *domain,
-				    dma_addr_t iova)
+				    dma_addr_t iova, unsigned long trans_flags)
 {
 	if (unlikely(domain->ops->iova_to_phys_hard == NULL))
 		return 0;
 
-	return domain->ops->iova_to_phys_hard(domain, iova);
+	return domain->ops->iova_to_phys_hard(domain, iova, trans_flags);
 }
 
 uint64_t iommu_iova_to_pte(struct iommu_domain *domain,
@@ -2078,3 +2103,23 @@ int iommu_fwspec_add_ids(struct device *dev, u32 *ids, int num_ids)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(iommu_fwspec_add_ids);
+
+/*
+ * Return the id asoociated with a pci device.
+ */
+int iommu_fwspec_get_id(struct device *dev, u32 *id)
+{
+	struct iommu_fwspec *fwspec = dev->iommu_fwspec;
+
+	if (!fwspec)
+		return -EINVAL;
+
+	if (!dev_is_pci(dev))
+		return -EINVAL;
+
+	if (fwspec->num_ids != 1)
+		return -EINVAL;
+
+	*id = fwspec->ids[0];
+	return 0;
+}

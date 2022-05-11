@@ -464,6 +464,7 @@ static int dm_blk_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 
 static int dm_prepare_ioctl(struct mapped_device *md, int *srcu_idx,
 			    struct block_device **bdev)
+	__acquires(md->io_barrier)
 {
 	struct dm_target *tgt;
 	struct dm_table *map;
@@ -497,6 +498,7 @@ retry:
 }
 
 static void dm_unprepare_ioctl(struct mapped_device *md, int srcu_idx)
+	__releases(md->io_barrier)
 {
 	dm_put_live_table(md, srcu_idx);
 }
@@ -517,7 +519,7 @@ static int dm_blk_ioctl(struct block_device *bdev, fmode_t mode,
 		 * subset of the parent bdev; require extra privileges.
 		 */
 		if (!capable(CAP_SYS_RAWIO)) {
-			DMDEBUG_LIMIT(
+			DMWARN_LIMIT(
 	"%s: sending ioctl %x to DM device without required privilege.",
 				current->comm, cmd);
 			r = -ENOIOCTLCMD;

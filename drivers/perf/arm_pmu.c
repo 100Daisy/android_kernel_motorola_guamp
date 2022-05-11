@@ -321,9 +321,6 @@ validate_group(struct perf_event *event)
 	if (!validate_event(event->pmu, &fake_pmu, leader))
 		return -EINVAL;
 
-	if (event == leader)
-		return 0;
-
 	for_each_sibling_event(sibling, leader) {
 		if (!validate_event(event->pmu, &fake_pmu, sibling))
 			return -EINVAL;
@@ -421,7 +418,12 @@ __hw_perf_event_init(struct perf_event *event)
 		local64_set(&hwc->period_left, hwc->sample_period);
 	}
 
-	return validate_group(event);
+	if (event->group_leader != event) {
+		if (validate_group(event) != 0)
+			return -EINVAL;
+	}
+
+	return 0;
 }
 
 static int armpmu_event_init(struct perf_event *event)
@@ -673,6 +675,9 @@ static void cpu_pm_pmu_setup(struct arm_pmu *armpmu, unsigned long cmd)
 		if (!event)
 			continue;
 
+		if (event->state != PERF_EVENT_STATE_ACTIVE)
+			continue;
+
 		switch (cmd) {
 		case CPU_PM_ENTER:
 			/*
@@ -819,6 +824,7 @@ static struct arm_pmu *__armpmu_alloc(gfp_t flags)
 		 * validation).
 		 */
 		.capabilities	= PERF_PMU_CAP_HETEROGENEOUS_CPUS,
+		.events_across_hotplug	= 1,
 	};
 
 	pmu->attr_groups[ARMPMU_ATTR_GROUP_COMMON] =

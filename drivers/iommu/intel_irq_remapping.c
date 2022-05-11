@@ -543,8 +543,9 @@ static int intel_setup_irq_remapping(struct intel_iommu *iommu)
 					    fn, &intel_ir_domain_ops,
 					    iommu);
 	if (!iommu->ir_domain) {
+		irq_domain_free_fwnode(fn);
 		pr_err("IR%d: failed to allocate irqdomain\n", iommu->seq_id);
-		goto out_free_fwnode;
+		goto out_free_bitmap;
 	}
 	iommu->ir_msi_domain =
 		arch_create_remap_msi_irq_domain(iommu->ir_domain,
@@ -568,7 +569,7 @@ static int intel_setup_irq_remapping(struct intel_iommu *iommu)
 
 		if (dmar_enable_qi(iommu)) {
 			pr_err("Failed to enable queued invalidation\n");
-			goto out_free_ir_domain;
+			goto out_free_bitmap;
 		}
 	}
 
@@ -592,14 +593,6 @@ static int intel_setup_irq_remapping(struct intel_iommu *iommu)
 
 	return 0;
 
-out_free_ir_domain:
-	if (iommu->ir_msi_domain)
-		irq_domain_remove(iommu->ir_msi_domain);
-	iommu->ir_msi_domain = NULL;
-	irq_domain_remove(iommu->ir_domain);
-	iommu->ir_domain = NULL;
-out_free_fwnode:
-	irq_domain_free_fwnode(fn);
 out_free_bitmap:
 	kfree(bitmap);
 out_free_pages:
@@ -1380,8 +1373,6 @@ static int intel_irq_remapping_alloc(struct irq_domain *domain,
 		irq_data = irq_domain_get_irq_data(domain, virq + i);
 		irq_cfg = irqd_cfg(irq_data);
 		if (!irq_data || !irq_cfg) {
-			if (!i)
-				kfree(data);
 			ret = -EINVAL;
 			goto out_free_data;
 		}

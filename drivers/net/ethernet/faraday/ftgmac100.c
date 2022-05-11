@@ -1333,7 +1333,6 @@ static int ftgmac100_poll(struct napi_struct *napi, int budget)
 	 */
 	if (unlikely(priv->need_mac_restart)) {
 		ftgmac100_start_hw(priv);
-		priv->need_mac_restart = false;
 
 		/* Re-enable "bad" interrupts */
 		iowrite32(FTGMAC100_INT_BAD,
@@ -1885,8 +1884,6 @@ static int ftgmac100_probe(struct platform_device *pdev)
 	return 0;
 
 err_ncsi_dev:
-	if (priv->ndev)
-		ncsi_unregister_dev(priv->ndev);
 err_register_netdev:
 	ftgmac100_destroy_mdio(netdev);
 err_setup_mdio:
@@ -1907,8 +1904,6 @@ static int ftgmac100_remove(struct platform_device *pdev)
 	netdev = platform_get_drvdata(pdev);
 	priv = netdev_priv(netdev);
 
-	if (priv->ndev)
-		ncsi_unregister_dev(priv->ndev);
 	unregister_netdev(netdev);
 
 	clk_disable_unprepare(priv->clk);

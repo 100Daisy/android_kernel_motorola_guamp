@@ -77,14 +77,6 @@
 #include <linux/bpf.h>
 #include <linux/bpf_trace.h>
 #include <linux/mutex.h>
-#include <linux/ieee802154.h>
-#include <linux/if_ltalk.h>
-#include <uapi/linux/if_fddi.h>
-#include <uapi/linux/if_hippi.h>
-#include <uapi/linux/if_fc.h>
-#include <net/ax25.h>
-#include <net/rose.h>
-#include <net/6lowpan.h>
 
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
@@ -1085,7 +1077,6 @@ static netdev_tx_t tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct tun_struct *tun = netdev_priv(dev);
 	int txq = skb->queue_mapping;
-	struct netdev_queue *queue;
 	struct tun_file *tfile;
 	int len = skb->len;
 
@@ -1131,10 +1122,6 @@ static netdev_tx_t tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	if (ptr_ring_produce(&tfile->tx_ring, skb))
 		goto drop;
-
-	/* NETIF_F_LLTX requires to do our own update of trans_start */
-	queue = netdev_get_tx_queue(dev, txq);
-	queue->trans_start = jiffies;
 
 	/* Notify and wake up reader process */
 	if (tfile->flags & TUN_FASYNC)
@@ -1463,7 +1450,7 @@ static struct sk_buff *tun_napi_alloc_frags(struct tun_file *tfile,
 	int i;
 
 	if (it->nr_segs > MAX_SKB_FRAGS + 1)
-		return ERR_PTR(-EMSGSIZE);
+		return ERR_PTR(-ENOMEM);
 
 	local_bh_disable();
 	skb = napi_get_frags(&tfile->napi);
@@ -1859,6 +1846,10 @@ drop:
 		return -EINVAL;
 	}
 
+	if (!(tun->flags & IFF_NO_PI))
+		if (pi.flags & htons(CHECKSUM_UNNECESSARY))
+			skb->ip_summed = CHECKSUM_UNNECESSARY;
+
 	switch (tun->flags & TUN_TYPE_MASK) {
 	case IFF_TUN:
 		if (tun->flags & IFF_NO_PI) {
@@ -2001,15 +1992,12 @@ static ssize_t tun_chr_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct tun_file *tfile = file->private_data;
 	struct tun_struct *tun = tun_get(tfile);
 	ssize_t result;
-	int noblock = 0;
 
 	if (!tun)
 		return -EBADFD;
 
-	if ((file->f_flags & O_NONBLOCK) || (iocb->ki_flags & IOCB_NOWAIT))
-		noblock = 1;
-
-	result = tun_get_user(tun, tfile, NULL, from, noblock, false);
+	result = tun_get_user(tun, tfile, NULL, from,
+			      file->f_flags & O_NONBLOCK, false);
 
 	tun_put(tun);
 	return result;
@@ -2230,15 +2218,10 @@ static ssize_t tun_chr_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	struct tun_file *tfile = file->private_data;
 	struct tun_struct *tun = tun_get(tfile);
 	ssize_t len = iov_iter_count(to), ret;
-	int noblock = 0;
 
 	if (!tun)
 		return -EBADFD;
-
-	if ((file->f_flags & O_NONBLOCK) || (iocb->ki_flags & IOCB_NOWAIT))
-		noblock = 1;
-
-	ret = tun_do_read(tun, tfile, to, noblock, NULL);
+	ret = tun_do_read(tun, tfile, to, file->f_flags & O_NONBLOCK, NULL);
 	ret = min_t(ssize_t, ret, len);
 	if (ret > 0)
 		iocb->ki_pos = ret;
@@ -2877,45 +2860,6 @@ static int tun_set_ebpf(struct tun_struct *tun, struct tun_prog **prog_p,
 	return __tun_set_ebpf(tun, prog_p, prog);
 }
 
-/* Return correct value for tun->dev->addr_len based on tun->dev->type. */
-static unsigned char tun_get_addr_len(unsigned short type)
-{
-	switch (type) {
-	case ARPHRD_IP6GRE:
-	case ARPHRD_TUNNEL6:
-		return sizeof(struct in6_addr);
-	case ARPHRD_IPGRE:
-	case ARPHRD_TUNNEL:
-	case ARPHRD_SIT:
-		return 4;
-	case ARPHRD_ETHER:
-		return ETH_ALEN;
-	case ARPHRD_IEEE802154:
-	case ARPHRD_IEEE802154_MONITOR:
-		return IEEE802154_EXTENDED_ADDR_LEN;
-	case ARPHRD_PHONET_PIPE:
-	case ARPHRD_PPP:
-	case ARPHRD_NONE:
-		return 0;
-	case ARPHRD_6LOWPAN:
-		return EUI64_ADDR_LEN;
-	case ARPHRD_FDDI:
-		return FDDI_K_ALEN;
-	case ARPHRD_HIPPI:
-		return HIPPI_ALEN;
-	case ARPHRD_IEEE802:
-		return FC_ALEN;
-	case ARPHRD_ROSE:
-		return ROSE_ADDR_LEN;
-	case ARPHRD_NETROM:
-		return AX25_ADDR_LEN;
-	case ARPHRD_LOCALTLK:
-		return LTALK_ALEN;
-	default:
-		return 0;
-	}
-}
-
 static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 			    unsigned long arg, int ifreq_len)
 {
@@ -2932,6 +2876,12 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 	int le;
 	int ret;
 	bool do_notify = false;
+
+#ifdef CONFIG_ANDROID_PARANOID_NETWORK
+	if (cmd != TUNGETIFF && !capable(CAP_NET_ADMIN)) {
+		return -EPERM;
+	}
+#endif
 
 	if (cmd == TUNSETIFF || cmd == TUNSETQUEUE ||
 	    (_IOC_TYPE(cmd) == SOCK_IOC_TYPE && cmd != SIOCGSKNS)) {
@@ -3070,7 +3020,6 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 			ret = -EBUSY;
 		} else {
 			tun->dev->type = (int) arg;
-			tun->dev->addr_len = tun_get_addr_len(tun->dev->type);
 			tun_debug(KERN_INFO, tun, "linktype set to %d\n",
 				  tun->dev->type);
 			ret = 0;

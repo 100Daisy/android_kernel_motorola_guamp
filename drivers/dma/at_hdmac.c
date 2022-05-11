@@ -1683,11 +1683,9 @@ static struct dma_chan *at_dma_xlate(struct of_phandle_args *dma_spec,
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
 
-	atslave = kmalloc(sizeof(*atslave), GFP_KERNEL);
-	if (!atslave) {
-		put_device(&dmac_pdev->dev);
+	atslave = kzalloc(sizeof(*atslave), GFP_KERNEL);
+	if (!atslave)
 		return NULL;
-	}
 
 	atslave->cfg = ATC_DST_H2SEL_HW | ATC_SRC_H2SEL_HW;
 	/*
@@ -1716,11 +1714,8 @@ static struct dma_chan *at_dma_xlate(struct of_phandle_args *dma_spec,
 	atslave->dma_dev = &dmac_pdev->dev;
 
 	chan = dma_request_channel(mask, at_dma_filter, atslave);
-	if (!chan) {
-		put_device(&dmac_pdev->dev);
-		kfree(atslave);
+	if (!chan)
 		return NULL;
-	}
 
 	atchan = to_at_dma_chan(chan);
 	atchan->per_if = dma_spec->args[0] & 0xff;

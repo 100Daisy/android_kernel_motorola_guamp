@@ -3,6 +3,7 @@
  * Copyright (c) 2008, Jouni Malinen <j@w1.fi>
  * Copyright (c) 2011, Javier Lopez <jlopex@gmail.com>
  * Copyright (c) 2016 - 2017 Intel Deutschland GmbH
+ * Copyright (C) 2018 Intel Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -2082,15 +2083,6 @@ static void hw_scan_work(struct work_struct *work)
 			if (req->ie_len)
 				skb_put_data(probe, req->ie, req->ie_len);
 
-			if (!ieee80211_tx_prepare_skb(hwsim->hw,
-						      hwsim->hw_scan_vif,
-						      probe,
-						      hwsim->tmp_chan->band,
-						      NULL)) {
-				kfree_skb(probe);
-				continue;
-			}
-
 			local_bh_disable();
 			mac80211_hwsim_tx_frame(hwsim->hw, probe,
 						hwsim->tmp_chan);
@@ -2537,23 +2529,20 @@ static const struct ieee80211_sband_iftype_data he_capa_2ghz = {
 				IEEE80211_HE_MAC_CAP0_HTC_HE,
 			.mac_cap_info[1] =
 				IEEE80211_HE_MAC_CAP1_TF_MAC_PAD_DUR_16US |
-				IEEE80211_HE_MAC_CAP1_MULTI_TID_AGG_QOS_8,
+				IEEE80211_HE_MAC_CAP1_MULTI_TID_AGG_RX_QOS_8,
 			.mac_cap_info[2] =
 				IEEE80211_HE_MAC_CAP2_BSR |
 				IEEE80211_HE_MAC_CAP2_MU_CASCADING |
 				IEEE80211_HE_MAC_CAP2_ACK_EN,
 			.mac_cap_info[3] =
-				IEEE80211_HE_MAC_CAP3_GRP_ADDR_MULTI_STA_BA_DL_MU |
 				IEEE80211_HE_MAC_CAP3_OMI_CONTROL |
-				IEEE80211_HE_MAC_CAP3_MAX_A_AMPDU_LEN_EXP_VHT_2,
+				IEEE80211_HE_MAC_CAP3_MAX_AMPDU_LEN_EXP_VHT_2,
 			.mac_cap_info[4] = IEEE80211_HE_MAC_CAP4_AMDSU_IN_AMPDU,
-			.phy_cap_info[0] =
-				IEEE80211_HE_PHY_CAP0_DUAL_BAND,
 			.phy_cap_info[1] =
 				IEEE80211_HE_PHY_CAP1_PREAMBLE_PUNC_RX_MASK |
 				IEEE80211_HE_PHY_CAP1_DEVICE_CLASS_A |
 				IEEE80211_HE_PHY_CAP1_LDPC_CODING_IN_PAYLOAD |
-				IEEE80211_HE_PHY_CAP1_MIDAMBLE_RX_MAX_NSTS,
+				IEEE80211_HE_PHY_CAP1_MIDAMBLE_RX_TX_MAX_NSTS,
 			.phy_cap_info[2] =
 				IEEE80211_HE_PHY_CAP2_NDP_4x_LTF_AND_3_2US |
 				IEEE80211_HE_PHY_CAP2_STBC_TX_UNDER_80MHZ |
@@ -2587,18 +2576,16 @@ static const struct ieee80211_sband_iftype_data he_capa_5ghz = {
 				IEEE80211_HE_MAC_CAP0_HTC_HE,
 			.mac_cap_info[1] =
 				IEEE80211_HE_MAC_CAP1_TF_MAC_PAD_DUR_16US |
-				IEEE80211_HE_MAC_CAP1_MULTI_TID_AGG_QOS_8,
+				IEEE80211_HE_MAC_CAP1_MULTI_TID_AGG_RX_QOS_8,
 			.mac_cap_info[2] =
 				IEEE80211_HE_MAC_CAP2_BSR |
 				IEEE80211_HE_MAC_CAP2_MU_CASCADING |
 				IEEE80211_HE_MAC_CAP2_ACK_EN,
 			.mac_cap_info[3] =
-				IEEE80211_HE_MAC_CAP3_GRP_ADDR_MULTI_STA_BA_DL_MU |
 				IEEE80211_HE_MAC_CAP3_OMI_CONTROL |
-				IEEE80211_HE_MAC_CAP3_MAX_A_AMPDU_LEN_EXP_VHT_2,
+				IEEE80211_HE_MAC_CAP3_MAX_AMPDU_LEN_EXP_VHT_2,
 			.mac_cap_info[4] = IEEE80211_HE_MAC_CAP4_AMDSU_IN_AMPDU,
 			.phy_cap_info[0] =
-				IEEE80211_HE_PHY_CAP0_DUAL_BAND |
 				IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_80MHZ_IN_5G |
 				IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_160MHZ_IN_5G |
 				IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_80PLUS80_MHZ_IN_5G,
@@ -2606,7 +2593,7 @@ static const struct ieee80211_sband_iftype_data he_capa_5ghz = {
 				IEEE80211_HE_PHY_CAP1_PREAMBLE_PUNC_RX_MASK |
 				IEEE80211_HE_PHY_CAP1_DEVICE_CLASS_A |
 				IEEE80211_HE_PHY_CAP1_LDPC_CODING_IN_PAYLOAD |
-				IEEE80211_HE_PHY_CAP1_MIDAMBLE_RX_MAX_NSTS,
+				IEEE80211_HE_PHY_CAP1_MIDAMBLE_RX_TX_MAX_NSTS,
 			.phy_cap_info[2] =
 				IEEE80211_HE_PHY_CAP2_NDP_4x_LTF_AND_3_2US |
 				IEEE80211_HE_PHY_CAP2_STBC_TX_UNDER_80MHZ |
@@ -3185,10 +3172,6 @@ static int hwsim_tx_info_frame_received_nl(struct sk_buff *skb_2,
 		}
 		txi->flags |= IEEE80211_TX_STAT_ACK;
 	}
-
-	if (hwsim_flags & HWSIM_TX_CTL_NO_ACK)
-		txi->flags |= IEEE80211_TX_STAT_NOACK_TRANSMITTED;
-
 	ieee80211_tx_status_irqsafe(data2->hw, skb);
 	return 0;
 out:

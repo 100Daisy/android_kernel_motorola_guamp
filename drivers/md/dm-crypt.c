@@ -2116,7 +2116,7 @@ static int crypt_set_keyring_key(struct crypt_config *cc, const char *key_string
 
 static int get_key_size(char **key_string)
 {
-	return (*key_string[0] == ':') ? -EINVAL : (int)(strlen(*key_string) >> 1);
+	return (*key_string[0] == ':') ? -EINVAL : strlen(*key_string) >> 1;
 }
 
 #endif
@@ -2190,12 +2190,7 @@ static void *crypt_page_alloc(gfp_t gfp_mask, void *pool_data)
 	struct crypt_config *cc = pool_data;
 	struct page *page;
 
-	/*
-	 * Note, percpu_counter_read_positive() may over (and under) estimate
-	 * the current usage by at most (batch - 1) * num_online_cpus() pages,
-	 * but avoids potential spinlock contention of an exact result.
-	 */
-	if (unlikely(percpu_counter_read_positive(&cc->n_allocated_pages) >= dm_crypt_pages_per_client) &&
+	if (unlikely(percpu_counter_compare(&cc->n_allocated_pages, dm_crypt_pages_per_client) >= 0) &&
 	    likely(gfp_mask & __GFP_NORETRY))
 		return NULL;
 
@@ -2885,7 +2880,8 @@ static int crypt_map(struct dm_target *ti, struct bio *bio)
 	 * - for REQ_OP_DISCARD caller must use flush if IO ordering matters
 	 */
 	if (unlikely(bio->bi_opf & REQ_PREFLUSH ||
-	    bio_op(bio) == REQ_OP_DISCARD)) {
+	    bio_op(bio) == REQ_OP_DISCARD ||
+	    bio_should_skip_dm_default_key(bio))) {
 		bio_set_dev(bio, cc->dev->bdev);
 		if (bio_sectors(bio))
 			bio->bi_iter.bi_sector = cc->start +
