@@ -1154,7 +1154,7 @@ int btrfs_mark_extent_written(struct btrfs_trans_handle *trans,
 	int del_nr = 0;
 	int del_slot = 0;
 	int recow;
-	int ret = 0;
+	int ret;
 	u64 ino = btrfs_ino(inode);
 
 	path = btrfs_alloc_path();
@@ -1374,7 +1374,7 @@ again:
 	}
 out:
 	btrfs_free_path(path);
-	return ret;
+	return 0;
 }
 
 /*
@@ -3016,11 +3016,8 @@ reserve_space:
 			goto out;
 		ret = btrfs_qgroup_reserve_data(inode, &data_reserved,
 						alloc_start, bytes_to_reserve);
-		if (ret) {
-			unlock_extent_cached(&BTRFS_I(inode)->io_tree, lockstart,
-					     lockend, &cached_state);
+		if (ret)
 			goto out;
-		}
 		ret = btrfs_prealloc_file_range(inode, mode, alloc_start,
 						alloc_end - alloc_start,
 						i_blocksize(inode),

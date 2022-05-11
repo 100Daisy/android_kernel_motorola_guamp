@@ -881,11 +881,9 @@ out:
 }
 
 /*
- * See if a given name and sequence number found in an inode back reference are
- * already in a directory and correctly point to this inode.
- *
- * Returns: < 0 on error, 0 if the directory entry does not exists and 1 if it
- * exists.
+ * helper function to see if a given name and sequence number found
+ * in an inode back reference are already in a directory and correctly
+ * point to this inode
  */
 static noinline int inode_in_dir(struct btrfs_root *root,
 				 struct btrfs_path *path,
@@ -894,35 +892,29 @@ static noinline int inode_in_dir(struct btrfs_root *root,
 {
 	struct btrfs_dir_item *di;
 	struct btrfs_key location;
-	int ret = 0;
+	int match = 0;
 
 	di = btrfs_lookup_dir_index_item(NULL, root, path, dirid,
 					 index, name, name_len, 0);
-	if (IS_ERR(di)) {
-		if (PTR_ERR(di) != -ENOENT)
-			ret = PTR_ERR(di);
-		goto out;
-	} else if (di) {
+	if (di && !IS_ERR(di)) {
 		btrfs_dir_item_key_to_cpu(path->nodes[0], di, &location);
 		if (location.objectid != objectid)
 			goto out;
-	} else {
+	} else
 		goto out;
-	}
-
 	btrfs_release_path(path);
+
 	di = btrfs_lookup_dir_item(NULL, root, path, dirid, name, name_len, 0);
-	if (IS_ERR(di)) {
-		ret = PTR_ERR(di);
-		goto out;
-	} else if (di) {
+	if (di && !IS_ERR(di)) {
 		btrfs_dir_item_key_to_cpu(path->nodes[0], di, &location);
-		if (location.objectid == objectid)
-			ret = 1;
-	}
+		if (location.objectid != objectid)
+			goto out;
+	} else
+		goto out;
+	match = 1;
 out:
 	btrfs_release_path(path);
-	return ret;
+	return match;
 }
 
 /*
@@ -1149,10 +1141,7 @@ next:
 	/* look for a conflicting sequence number */
 	di = btrfs_lookup_dir_index_item(trans, root, path, btrfs_ino(dir),
 					 ref_index, name, namelen, 0);
-	if (IS_ERR(di)) {
-		if (PTR_ERR(di) != -ENOENT)
-			return PTR_ERR(di);
-	} else if (di) {
+	if (di && !IS_ERR(di)) {
 		ret = drop_one_dir_item(trans, root, path, dir, di);
 		if (ret)
 			return ret;
@@ -1162,9 +1151,7 @@ next:
 	/* look for a conflicing name */
 	di = btrfs_lookup_dir_item(trans, root, path, btrfs_ino(dir),
 				   name, namelen, 0);
-	if (IS_ERR(di)) {
-		return PTR_ERR(di);
-	} else if (di) {
+	if (di && !IS_ERR(di)) {
 		ret = drop_one_dir_item(trans, root, path, dir, di);
 		if (ret)
 			return ret;
@@ -1289,15 +1276,6 @@ again:
 						 inode, name, namelen);
 			kfree(name);
 			iput(dir);
-			/*
-			 * Whenever we need to check if a name exists or not, we
-			 * check the subvolume tree. So after an unlink we must
-			 * run delayed items, so that future checks for a name
-			 * during log replay see that the name does not exists
-			 * anymore.
-			 */
-			if (!ret)
-				ret = btrfs_run_delayed_items(trans);
 			if (ret)
 				goto out;
 			goto again;
@@ -1438,12 +1416,10 @@ static noinline int add_inode_ref(struct btrfs_trans_handle *trans,
 		if (ret)
 			goto out;
 
-		ret = inode_in_dir(root, path, btrfs_ino(BTRFS_I(dir)),
-				   btrfs_ino(BTRFS_I(inode)), ref_index,
-				   name, namelen);
-		if (ret < 0) {
-			goto out;
-		} else if (ret == 0) {
+		/* if we already have a perfect match, we're done */
+		if (!inode_in_dir(root, path, btrfs_ino(BTRFS_I(dir)),
+					btrfs_ino(BTRFS_I(inode)), ref_index,
+					name, namelen)) {
 			/*
 			 * look for a conflicting back reference in the
 			 * metadata. if we find one we have to unlink that name
@@ -1489,15 +1465,6 @@ static noinline int add_inode_ref(struct btrfs_trans_handle *trans,
 				 */
 				if (!ret && inode->i_nlink == 0)
 					inc_nlink(inode);
-				/*
-				 * Whenever we need to check if a name exists or
-				 * not, we check the subvolume tree. So after an
-				 * unlink we must run delayed items, so that future
-				 * checks for a name during log replay see that the
-				 * name does not exists anymore.
-				 */
-				if (!ret)
-					ret = btrfs_run_delayed_items(trans);
 			}
 			if (ret < 0)
 				goto out;
@@ -1511,7 +1478,6 @@ static noinline int add_inode_ref(struct btrfs_trans_handle *trans,
 
 			btrfs_update_inode(trans, root, inode);
 		}
-		/* Else, ret == 1, we already have a perfect match, we're done. */
 
 		ref_ptr = (unsigned long)(ref_ptr + ref_struct_size) + namelen;
 		kfree(name);
@@ -1733,7 +1699,6 @@ static noinline int fixup_inode_link_counts(struct btrfs_trans_handle *trans,
 			break;
 
 		if (ret == 1) {
-			ret = 0;
 			if (path->slots[0] == 0)
 				break;
 			path->slots[0]--;
@@ -1746,19 +1711,17 @@ static noinline int fixup_inode_link_counts(struct btrfs_trans_handle *trans,
 
 		ret = btrfs_del_item(trans, root, path);
 		if (ret)
-			break;
+			goto out;
 
 		btrfs_release_path(path);
 		inode = read_one_inode(root, key.offset);
-		if (!inode) {
-			ret = -EIO;
-			break;
-		}
+		if (!inode)
+			return -EIO;
 
 		ret = fixup_inode_link_count(trans, root, inode);
 		iput(inode);
 		if (ret)
-			break;
+			goto out;
 
 		/*
 		 * fixup on a directory may create new entries,
@@ -1767,6 +1730,8 @@ static noinline int fixup_inode_link_counts(struct btrfs_trans_handle *trans,
 		 */
 		key.offset = (u64)-1;
 	}
+	ret = 0;
+out:
 	btrfs_release_path(path);
 	return ret;
 }
@@ -1805,6 +1770,8 @@ static noinline int link_to_fixup_dir(struct btrfs_trans_handle *trans,
 		ret = btrfs_update_inode(trans, root, inode);
 	} else if (ret == -EEXIST) {
 		ret = 0;
+	} else {
+		BUG(); /* Logic Error */
 	}
 	iput(inode);
 
@@ -1900,8 +1867,8 @@ static noinline int replay_one_name(struct btrfs_trans_handle *trans,
 	struct btrfs_key log_key;
 	struct inode *dir;
 	u8 log_type;
-	bool exists;
-	int ret;
+	int exists;
+	int ret = 0;
 	bool update_size = (key->type == BTRFS_DIR_INDEX_KEY);
 	bool name_added = false;
 
@@ -1921,12 +1888,12 @@ static noinline int replay_one_name(struct btrfs_trans_handle *trans,
 		   name_len);
 
 	btrfs_dir_item_key_to_cpu(eb, di, &log_key);
-	ret = btrfs_lookup_inode(trans, root, path, &log_key, 0);
+	exists = btrfs_lookup_inode(trans, root, path, &log_key, 0);
+	if (exists == 0)
+		exists = 1;
+	else
+		exists = 0;
 	btrfs_release_path(path);
-	if (ret < 0)
-		goto out;
-	exists = (ret == 0);
-	ret = 0;
 
 	if (key->type == BTRFS_DIR_ITEM_KEY) {
 		dst_di = btrfs_lookup_dir_item(trans, root, path, key->objectid,
@@ -1941,14 +1908,7 @@ static noinline int replay_one_name(struct btrfs_trans_handle *trans,
 		ret = -EINVAL;
 		goto out;
 	}
-
-	if (dst_di == ERR_PTR(-ENOENT))
-		dst_di = NULL;
-
-	if (IS_ERR(dst_di)) {
-		ret = PTR_ERR(dst_di);
-		goto out;
-	} else if (!dst_di) {
+	if (IS_ERR_OR_NULL(dst_di)) {
 		/* we need a sequence number to insert, so we only
 		 * do inserts for the BTRFS_DIR_INDEX_KEY types
 		 */
@@ -2430,9 +2390,7 @@ again:
 		else {
 			ret = find_dir_range(log, path, dirid, key_type,
 					     &range_start, &range_end);
-			if (ret < 0)
-				goto out;
-			else if (ret > 0)
+			if (ret != 0)
 				break;
 		}
 
@@ -6013,7 +5971,6 @@ next:
 error:
 	if (wc.trans)
 		btrfs_end_transaction(wc.trans);
-	clear_bit(BTRFS_FS_LOG_RECOVERING, &fs_info->flags);
 	btrfs_free_path(path);
 	return ret;
 }
