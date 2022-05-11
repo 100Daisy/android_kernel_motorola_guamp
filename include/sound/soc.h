@@ -19,6 +19,7 @@
 #include <linux/kernel.h>
 #include <linux/regmap.h>
 #include <linux/log2.h>
+#include <linux/async.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/compress_driver.h>
@@ -1366,6 +1367,8 @@ void snd_soc_component_async_complete(struct snd_soc_component *component);
 int snd_soc_component_test_bits(struct snd_soc_component *component,
 	unsigned int reg, unsigned int mask, unsigned int value);
 struct snd_soc_component *soc_find_component(
+	const struct device_node *of_node, const char *name);
+struct snd_soc_component *soc_find_component_locked(
 	const struct device_node *of_node, const char *name);
 
 /* component wide operations */

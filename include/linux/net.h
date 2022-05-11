@@ -84,12 +84,6 @@ enum sock_type {
 
 #endif /* ARCH_HAS_SOCKET_TYPES */
 
-/**
- * enum sock_shutdown_cmd - Shutdown types
- * @SHUT_RD: shutdown receptions
- * @SHUT_WR: shutdown transmissions
- * @SHUT_RDWR: shutdown receptions/transmissions
- */
 enum sock_shutdown_cmd {
 	SHUT_RD,
 	SHUT_WR,

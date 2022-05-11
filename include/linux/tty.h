@@ -306,10 +306,6 @@ struct tty_struct {
 	struct termiox *termiox;	/* May be NULL for unsupported */
 	char name[64];
 	struct pid *pgrp;		/* Protected by ctrl lock */
-	/*
-	 * Writes protected by both ctrl lock and legacy mutex, readers must use
-	 * at least one of them.
-	 */
 	struct pid *session;
 	unsigned long flags;
 	int count;
@@ -329,6 +325,10 @@ struct tty_struct {
 	wait_queue_head_t write_wait;
 	wait_queue_head_t read_wait;
 	struct work_struct hangup_work;
+#if defined(CONFIG_TTY_FLUSH_LOCAL_ECHO)
+	int delayed_work;
+	struct delayed_work echo_delayed_work;
+#endif
 	void *disc_data;
 	void *driver_data;
 	spinlock_t files_lock;		/* protects tty_files list */
