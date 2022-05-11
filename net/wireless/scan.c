@@ -650,48 +650,43 @@ void cfg80211_bss_expire(struct cfg80211_registered_device *rdev)
 	__cfg80211_bss_expire(rdev, jiffies - IEEE80211_SCAN_RESULT_EXPIRE);
 }
 
-const u8 *cfg80211_find_ie_match(u8 eid, const u8 *ies, int len,
-				 const u8 *match, int match_len,
-				 int match_offset)
+const struct element *
+cfg80211_find_elem_match(u8 eid, const u8 *ies, unsigned int len,
+			 const u8 *match, unsigned int match_len,
+			 unsigned int match_offset)
 {
 	const struct element *elem;
 
-	/* match_offset can't be smaller than 2, unless match_len is
-	 * zero, in which case match_offset must be zero as well.
-	 */
-	if (WARN_ON((match_len && match_offset < 2) ||
-		    (!match_len && match_offset)))
-		return NULL;
-
 	for_each_element_id(elem, eid, ies, len) {
-		if (elem->datalen >= match_offset - 2 + match_len &&
-		    !memcmp(elem->data + match_offset - 2, match, match_len))
-			return (void *)elem;
+		if (elem->datalen >= match_offset + match_len &&
+		    !memcmp(elem->data + match_offset, match, match_len))
+			return elem;
 	}
 
 	return NULL;
 }
-EXPORT_SYMBOL(cfg80211_find_ie_match);
+EXPORT_SYMBOL(cfg80211_find_elem_match);
 
-const u8 *cfg80211_find_vendor_ie(unsigned int oui, int oui_type,
-				  const u8 *ies, int len)
+const struct element *cfg80211_find_vendor_elem(unsigned int oui, int oui_type,
+						const u8 *ies,
+						unsigned int len)
 {
-	const u8 *ie;
+	const struct element *elem;
 	u8 match[] = { oui >> 16, oui >> 8, oui, oui_type };
 	int match_len = (oui_type < 0) ? 3 : sizeof(match);
 
 	if (WARN_ON(oui_type > 0xff))
 		return NULL;
 
-	ie = cfg80211_find_ie_match(WLAN_EID_VENDOR_SPECIFIC, ies, len,
-				    match, match_len, 2);
+	elem = cfg80211_find_elem_match(WLAN_EID_VENDOR_SPECIFIC, ies, len,
+					match, match_len, 0);
 
-	if (ie && (ie[1] < 4))
+	if (!elem || elem->datalen < 4)
 		return NULL;
 
-	return ie;
+	return elem;
 }
-EXPORT_SYMBOL(cfg80211_find_vendor_ie);
+EXPORT_SYMBOL(cfg80211_find_vendor_elem);
 
 /**
  * enum bss_compare_mode - BSS compare mode
@@ -1185,14 +1180,14 @@ cfg80211_bss_update(struct cfg80211_registered_device *rdev,
 			 * be grouped with this beacon for updates ...
 			 */
 			if (!cfg80211_combine_bsses(rdev, new)) {
-				bss_ref_put(rdev, new);
+				kfree(new);
 				goto drop;
 			}
 		}
 
 		if (rdev->bss_entries >= bss_entries_limit &&
 		    !cfg80211_bss_expire_oldest(rdev)) {
-			bss_ref_put(rdev, new);
+			kfree(new);
 			goto drop;
 		}
 
@@ -1258,8 +1253,8 @@ cfg80211_get_bss_channel(struct wiphy *wiphy, const u8 *ie, size_t ielen,
 		return channel;
 	}
 
-	freq = ieee80211_channel_to_frequency(channel_number, channel->band);
-	alt_channel = ieee80211_get_channel(wiphy, freq);
+	freq = ieee80211_channel_to_freq_khz(channel_number, channel->band);
+	alt_channel = ieee80211_get_channel_khz(wiphy, freq);
 	if (!alt_channel) {
 		if (channel->band == NL80211_BAND_2GHZ) {
 			/*
@@ -1555,12 +1550,7 @@ cfg80211_update_notlisted_nontrans(struct wiphy *wiphy,
 		return;
 	new_ie_len -= trans_ssid[1];
 	mbssid = cfg80211_find_ie(WLAN_EID_MULTIPLE_BSSID, ie, ielen);
-	/*
-	 * It's not valid to have the MBSSID element before SSID
-	 * ignore if that happens - the code below assumes it is
-	 * after (while copying things inbetween).
-	 */
-	if (!mbssid || mbssid < trans_ssid)
+	if (!mbssid)
 		return;
 	new_ie_len -= mbssid[1];
 	rcu_read_lock();

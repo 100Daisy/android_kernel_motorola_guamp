@@ -276,7 +276,6 @@ ip6t_do_table(struct sk_buff *skb,
 	 * things we don't know, ie. tcp syn flag or ports).  If the
 	 * rule is also a fragment-specific rule, non-fragments won't
 	 * match it. */
-	acpar.fragoff = 0;
 	acpar.hotdrop = false;
 	acpar.state   = state;
 
@@ -1097,8 +1096,6 @@ __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 	    (newinfo->number <= oldinfo->initial_entries))
 		module_put(t->me);
 
-	xt_table_unlock(t);
-
 	get_old_counters(oldinfo, counters);
 
 	/* Decrease module usage counts and free resource */
@@ -1112,6 +1109,7 @@ __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 		net_warn_ratelimited("ip6tables: counters copy to user failed while replacing table\n");
 	}
 	vfree(counters);
+	xt_table_unlock(t);
 	return ret;
 
  put_module:
@@ -1448,8 +1446,6 @@ translate_compat_table(struct net *net,
 	newinfo = xt_alloc_table_info(size);
 	if (!newinfo)
 		goto out_unlock;
-
-	memset(newinfo->entries, 0, size);
 
 	newinfo->number = compatr->num_entries;
 	for (i = 0; i < NF_INET_NUMHOOKS; i++) {

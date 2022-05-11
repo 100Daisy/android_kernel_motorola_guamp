@@ -24,9 +24,6 @@
 #include <net/addrconf.h>
 #include <net/inet_connection_sock.h>
 #include <net/inet_hashtables.h>
-#if IS_ENABLED(CONFIG_IPV6)
-#include <net/inet6_hashtables.h>
-#endif
 #include <net/secure_seq.h>
 #include <net/ip.h>
 #include <net/tcp.h>
@@ -516,52 +513,10 @@ static u32 inet_sk_port_offset(const struct sock *sk)
 					  inet->inet_dport);
 }
 
-/* Searches for an exsiting socket in the ehash bucket list.
- * Returns true if found, false otherwise.
+/* insert a socket into ehash, and eventually remove another one
+ * (The another one can be a SYN_RECV or TIMEWAIT
  */
-static bool inet_ehash_lookup_by_sk(struct sock *sk,
-				    struct hlist_nulls_head *list)
-{
-	const __portpair ports = INET_COMBINED_PORTS(sk->sk_dport, sk->sk_num);
-	const int sdif = sk->sk_bound_dev_if;
-	const int dif = sk->sk_bound_dev_if;
-	const struct hlist_nulls_node *node;
-	struct net *net = sock_net(sk);
-	struct sock *esk;
-
-	INET_ADDR_COOKIE(acookie, sk->sk_daddr, sk->sk_rcv_saddr);
-
-	sk_nulls_for_each_rcu(esk, node, list) {
-		if (esk->sk_hash != sk->sk_hash)
-			continue;
-		if (sk->sk_family == AF_INET) {
-			if (unlikely(INET_MATCH(esk, net, acookie,
-						sk->sk_daddr,
-						sk->sk_rcv_saddr,
-						ports, dif, sdif))) {
-				return true;
-			}
-		}
-#if IS_ENABLED(CONFIG_IPV6)
-		else if (sk->sk_family == AF_INET6) {
-			if (unlikely(INET6_MATCH(esk, net,
-						 &sk->sk_v6_daddr,
-						 &sk->sk_v6_rcv_saddr,
-						 ports, dif, sdif))) {
-				return true;
-			}
-		}
-#endif
-	}
-	return false;
-}
-
-/* Insert a socket into ehash, and eventually remove another one
- * (The another one can be a SYN_RECV or TIMEWAIT)
- * If an existing socket already exists, socket sk is not inserted,
- * and sets found_dup_sk parameter to true.
- */
-bool inet_ehash_insert(struct sock *sk, struct sock *osk, bool *found_dup_sk)
+bool inet_ehash_insert(struct sock *sk, struct sock *osk)
 {
 	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct hlist_nulls_head *list;
@@ -580,23 +535,16 @@ bool inet_ehash_insert(struct sock *sk, struct sock *osk, bool *found_dup_sk)
 	if (osk) {
 		WARN_ON_ONCE(sk->sk_hash != osk->sk_hash);
 		ret = sk_nulls_del_node_init_rcu(osk);
-	} else if (found_dup_sk) {
-		*found_dup_sk = inet_ehash_lookup_by_sk(sk, list);
-		if (*found_dup_sk)
-			ret = false;
 	}
-
 	if (ret)
 		__sk_nulls_add_node_rcu(sk, list);
-
 	spin_unlock(lock);
-
 	return ret;
 }
 
-bool inet_ehash_nolisten(struct sock *sk, struct sock *osk, bool *found_dup_sk)
+bool inet_ehash_nolisten(struct sock *sk, struct sock *osk)
 {
-	bool ok = inet_ehash_insert(sk, osk, found_dup_sk);
+	bool ok = inet_ehash_insert(sk, osk);
 
 	if (ok) {
 		sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
@@ -640,7 +588,7 @@ int __inet_hash(struct sock *sk, struct sock *osk)
 	int err = 0;
 
 	if (sk->sk_state != TCP_LISTEN) {
-		inet_ehash_nolisten(sk, osk, NULL);
+		inet_ehash_nolisten(sk, osk);
 		return 0;
 	}
 	WARN_ON(!sk_unhashed(sk));
@@ -735,7 +683,7 @@ int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 		tb = inet_csk(sk)->icsk_bind_hash;
 		spin_lock_bh(&head->lock);
 		if (sk_head(&tb->owners) == sk && !sk->sk_bind_node.next) {
-			inet_ehash_nolisten(sk, NULL, NULL);
+			inet_ehash_nolisten(sk, NULL);
 			spin_unlock_bh(&head->lock);
 			return 0;
 		}
@@ -811,7 +759,7 @@ ok:
 	inet_bind_hash(sk, tb, port);
 	if (sk_unhashed(sk)) {
 		inet_sk(sk)->inet_sport = htons(port);
-		inet_ehash_nolisten(sk, (struct sock *)tw, NULL);
+		inet_ehash_nolisten(sk, (struct sock *)tw);
 	}
 	if (tw)
 		inet_twsk_bind_unhash(tw, hinfo);

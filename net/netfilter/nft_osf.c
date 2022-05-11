@@ -22,11 +22,6 @@ static void nft_osf_eval(const struct nft_expr *expr, struct nft_regs *regs,
 	struct tcphdr _tcph;
 	const char *os_name;
 
-	if (pkt->tprot != IPPROTO_TCP) {
-		regs->verdict.code = NFT_BREAK;
-		return;
-	}
-
 	tcp = skb_header_pointer(skb, ip_hdrlen(skb),
 				 sizeof(struct tcphdr), &_tcph);
 	if (!tcp) {

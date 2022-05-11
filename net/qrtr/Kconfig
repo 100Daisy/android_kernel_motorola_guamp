@@ -28,4 +28,31 @@ config QRTR_TUN
 	  implement endpoints of QRTR, for purpose of tunneling data to other
 	  hosts or testing purposes.
 
+config QRTR_MHI
+	tristate "MHI IPC Router channels"
+	depends on MHI_BUS || (COMPILE_TEST && MHI_BUS=n)
+	help
+	  Say Y here to support MHI based ipcrouter channels.  MHI is the
+	  transport used for external modem connections for IPC Router. The
+	  MHI bus provides an asynchronous send mechanism, the QRTR MHI
+	  transport will wait for the uplink callback notification before
+	  returning to qrtr.
+
+config QRTR_USB
+	tristate "USB IPC Router channels"
+	depends on USB || (COMPILE_TEST && USB=n)
+	help
+	  Say Y here to support USB based ipcrouter channels. USB transport
+	  is used for connections with other sytems for IPC Router. The USB
+	  transport provides bulk endpoints to facilitate sending and receiving
+	  IPC Router data packets.
+
+config QRTR_FIFO
+	tristate "FIFO IPC Router channels"
+	help
+	Say Y here to support FIFO based ipcrouter channels. FIFO Transport
+	Layer enables IPC Router communication between two virtual machines.
+	The shared memory between virtual machines will be allocated by the
+	hypervisor and signal other VMs through virtualized interrupts.
+
 endif # QRTR

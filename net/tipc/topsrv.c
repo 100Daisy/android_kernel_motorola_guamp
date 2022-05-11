@@ -671,18 +671,12 @@ static int tipc_topsrv_start(struct net *net)
 
 	ret = tipc_topsrv_work_start(srv);
 	if (ret < 0)
-		goto err_start;
+		return ret;
 
 	ret = tipc_topsrv_create_listener(srv);
 	if (ret < 0)
-		goto err_create;
+		tipc_topsrv_work_stop(srv);
 
-	return 0;
-
-err_create:
-	tipc_topsrv_work_stop(srv);
-err_start:
-	kfree(srv);
 	return ret;
 }
 

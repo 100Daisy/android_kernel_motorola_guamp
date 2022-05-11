@@ -1112,7 +1112,7 @@ static long rxrpc_read(const struct key *key,
 		default: /* we have a ticket we can't encode */
 			pr_err("Unsupported key token type (%u)\n",
 			       token->security_index);
-			return -ENOPKG;
+			continue;
 		}
 
 		_debug("token[%u]: toksize=%u", ntoks, toksize);
@@ -1227,9 +1227,7 @@ static long rxrpc_read(const struct key *key,
 			break;
 
 		default:
-			pr_err("Unsupported key token type (%u)\n",
-			       token->security_index);
-			return -ENOPKG;
+			break;
 		}
 
 		ASSERTCMP((unsigned long)xdr - (unsigned long)oldxdr, ==,

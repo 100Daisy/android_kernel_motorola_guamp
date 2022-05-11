@@ -360,6 +360,13 @@ int inet_csk_get_port(struct sock *sk, unsigned short snum)
 	head = &hinfo->bhash[inet_bhashfn(net, port,
 					  hinfo->bhash_size)];
 	spin_lock_bh(&head->lock);
+
+	if (inet_is_local_reserved_port(net, snum) &&
+	    !sysctl_reserved_port_bind) {
+		ret = 1;
+		goto fail_unlock;
+	}
+
 	inet_bind_bucket_for_each(tb, &head->chain)
 		if (net_eq(ib_net(tb), net) && tb->port == port)
 			goto tb_found;
@@ -698,15 +705,12 @@ static bool reqsk_queue_unlink(struct request_sock_queue *queue,
 	return found;
 }
 
-bool inet_csk_reqsk_queue_drop(struct sock *sk, struct request_sock *req)
+void inet_csk_reqsk_queue_drop(struct sock *sk, struct request_sock *req)
 {
-	bool unlinked = reqsk_queue_unlink(&inet_csk(sk)->icsk_accept_queue, req);
-
-	if (unlinked) {
+	if (reqsk_queue_unlink(&inet_csk(sk)->icsk_accept_queue, req)) {
 		reqsk_queue_removed(&inet_csk(sk)->icsk_accept_queue, req);
 		reqsk_put(req);
 	}
-	return unlinked;
 }
 EXPORT_SYMBOL(inet_csk_reqsk_queue_drop);
 
@@ -793,7 +797,7 @@ static void reqsk_queue_hash_req(struct request_sock *req,
 	timer_setup(&req->rsk_timer, reqsk_timer_handler, TIMER_PINNED);
 	mod_timer(&req->rsk_timer, jiffies + timeout);
 
-	inet_ehash_insert(req_to_sk(req), NULL, NULL);
+	inet_ehash_insert(req_to_sk(req), NULL);
 	/* before letting lookups find us, make sure all req fields
 	 * are committed to memory and refcnt initialized.
 	 */

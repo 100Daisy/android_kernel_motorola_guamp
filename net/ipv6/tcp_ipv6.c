@@ -206,7 +206,7 @@ static int tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr,
 	    !ipv6_addr_equal(&sk->sk_v6_daddr, &usin->sin6_addr)) {
 		tp->rx_opt.ts_recent = 0;
 		tp->rx_opt.ts_recent_stamp = 0;
-		WRITE_ONCE(tp->write_seq, 0);
+		tp->write_seq = 0;
 	}
 
 	sk->sk_v6_daddr = usin->sin6_addr;
@@ -304,11 +304,10 @@ static int tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr,
 
 	if (likely(!tp->repair)) {
 		if (!tp->write_seq)
-			WRITE_ONCE(tp->write_seq,
-				   secure_tcpv6_seq(np->saddr.s6_addr32,
-						    sk->sk_v6_daddr.s6_addr32,
-						    inet->inet_sport,
-						    inet->inet_dport));
+			tp->write_seq = secure_tcpv6_seq(np->saddr.s6_addr32,
+							 sk->sk_v6_daddr.s6_addr32,
+							 inet->inet_sport,
+							 inet->inet_dport);
 		tp->tsoffset = secure_tcpv6_ts_off(sock_net(sk),
 						   np->saddr.s6_addr32,
 						   sk->sk_v6_daddr.s6_addr32);
@@ -336,20 +335,11 @@ failure:
 static void tcp_v6_mtu_reduced(struct sock *sk)
 {
 	struct dst_entry *dst;
-	u32 mtu;
 
 	if ((1 << sk->sk_state) & (TCPF_LISTEN | TCPF_CLOSE))
 		return;
 
-	mtu = READ_ONCE(tcp_sk(sk)->mtu_info);
-
-	/* Drop requests trying to increase our current mss.
-	 * Check done in __ip6_rt_update_pmtu() is too late.
-	 */
-	if (tcp_mtu_to_mss(sk, mtu) >= tcp_sk(sk)->mss_cache)
-		return;
-
-	dst = inet6_csk_update_pmtu(sk, mtu);
+	dst = inet6_csk_update_pmtu(sk, tcp_sk(sk)->mtu_info);
 	if (!dst)
 		return;
 
@@ -428,8 +418,6 @@ static void tcp_v6_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 	}
 
 	if (type == ICMPV6_PKT_TOOBIG) {
-		u32 mtu = ntohl(info);
-
 		/* We are not interested in TCP_LISTEN and open_requests
 		 * (SYN-ACKs send out by Linux are always <576bytes so
 		 * they should go through unfragmented).
@@ -440,11 +428,7 @@ static void tcp_v6_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 		if (!ip6_sk_accept_pmtu(sk))
 			goto out;
 
-		if (mtu < IPV6_MIN_MTU)
-			goto out;
-
-		WRITE_ONCE(tp->mtu_info, mtu);
-
+		tp->mtu_info = ntohl(info);
 		if (!sock_owned_by_user(sk))
 			tcp_v6_mtu_reduced(sk);
 		else if (!test_and_set_bit(TCP_MTU_REDUCED_DEFERRED,
@@ -518,8 +502,7 @@ static int tcp_v6_send_synack(const struct sock *sk, struct dst_entry *dst,
 		opt = ireq->ipv6_opt;
 		if (!opt)
 			opt = rcu_dereference(np->opt);
-		err = ip6_xmit(sk, skb, fl6, skb->mark ? : sk->sk_mark, opt,
-			       np->tclass);
+		err = ip6_xmit(sk, skb, fl6, sk->sk_mark, opt, np->tclass);
 		rcu_read_unlock();
 		err = net_xmit_eval(err);
 	}
@@ -1055,11 +1038,6 @@ static int tcp_v6_conn_request(struct sock *sk, struct sk_buff *skb)
 	if (!ipv6_unicast_destination(skb))
 		goto drop;
 
-	if (ipv6_addr_v4mapped(&ipv6_hdr(skb)->saddr)) {
-		__IP6_INC_STATS(sock_net(sk), NULL, IPSTATS_MIB_INHDRERRORS);
-		return 0;
-	}
-
 	return tcp_conn_request(&tcp6_request_sock_ops,
 				&tcp_request_sock_ipv6_ops, sk, skb);
 
@@ -1090,7 +1068,6 @@ static struct sock *tcp_v6_syn_recv_sock(const struct sock *sk, struct sk_buff *
 	struct ipv6_txoptions *opt;
 	struct tcp6_sock *newtcp6sk;
 	struct inet_sock *newinet;
-	bool found_dup_sk = false;
 	struct tcp_sock *newtp;
 	struct sock *newsk;
 #ifdef CONFIG_TCP_MD5SIG
@@ -1259,8 +1236,7 @@ static struct sock *tcp_v6_syn_recv_sock(const struct sock *sk, struct sk_buff *
 		tcp_done(newsk);
 		goto out;
 	}
-	*own_req = inet_ehash_nolisten(newsk, req_to_sk(req_unhash),
-				       &found_dup_sk);
+	*own_req = inet_ehash_nolisten(newsk, req_to_sk(req_unhash));
 	if (*own_req) {
 		tcp_move_syn(newtp, req);
 
@@ -1274,15 +1250,6 @@ static struct sock *tcp_v6_syn_recv_sock(const struct sock *sk, struct sk_buff *
 				tcp_v6_restore_cb(newnp->pktoptions);
 				skb_set_owner_r(newnp->pktoptions, newsk);
 			}
-		}
-	} else {
-		if (!req_unhash && found_dup_sk) {
-			/* This code path should only be executed in the
-			 * syncookie case only
-			 */
-			bh_unlock_sock(newsk);
-			sock_put(newsk);
-			newsk = NULL;
 		}
 	}
 
@@ -1842,6 +1809,7 @@ static void get_tcp6_sock(struct seq_file *seq, struct sock *sp, int i)
 	const struct fastopen_queue *fastopenq = &icsk->icsk_accept_queue.fastopenq;
 	int rx_queue;
 	int state;
+	__u8 state_seq = sp->sk_state;
 
 	dest  = &sp->sk_v6_daddr;
 	src   = &sp->sk_v6_rcv_saddr;
@@ -1872,7 +1840,10 @@ static void get_tcp6_sock(struct seq_file *seq, struct sock *sp, int i)
 		 * we might find a transient negative value.
 		 */
 		rx_queue = max_t(int, READ_ONCE(tp->rcv_nxt) -
-				      READ_ONCE(tp->copied_seq), 0);
+				      tp->copied_seq, 0);
+
+	if (inet->transparent)
+		state_seq |= 0x80;
 
 	seq_printf(seq,
 		   "%4d: %08X%08X%08X%08X:%04X %08X%08X%08X%08X:%04X "
@@ -1882,8 +1853,8 @@ static void get_tcp6_sock(struct seq_file *seq, struct sock *sp, int i)
 		   src->s6_addr32[2], src->s6_addr32[3], srcp,
 		   dest->s6_addr32[0], dest->s6_addr32[1],
 		   dest->s6_addr32[2], dest->s6_addr32[3], destp,
-		   state,
-		   READ_ONCE(tp->write_seq) - tp->snd_una,
+		   state_seq,
+		   tp->write_seq - tp->snd_una,
 		   rx_queue,
 		   timer_active,
 		   jiffies_delta_to_clock_t(timer_expires - jiffies),

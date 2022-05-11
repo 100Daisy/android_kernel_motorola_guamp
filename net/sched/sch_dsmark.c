@@ -402,8 +402,7 @@ static void dsmark_reset(struct Qdisc *sch)
 	struct dsmark_qdisc_data *p = qdisc_priv(sch);
 
 	pr_debug("%s(sch %p,[qdisc %p])\n", __func__, sch, p);
-	if (p->q)
-		qdisc_reset(p->q);
+	qdisc_reset(p->q);
 	sch->qstats.backlog = 0;
 	sch->q.qlen = 0;
 }
@@ -415,7 +414,7 @@ static void dsmark_destroy(struct Qdisc *sch)
 	pr_debug("%s(sch %p,[qdisc %p])\n", __func__, sch, p);
 
 	tcf_block_put(p->block);
-	qdisc_put(p->q);
+	qdisc_destroy(p->q);
 	if (p->mv != p->embedded)
 		kfree(p->mv);
 }
