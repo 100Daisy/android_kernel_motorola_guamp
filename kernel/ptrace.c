@@ -163,21 +163,6 @@ void __ptrace_unlink(struct task_struct *child)
 	spin_unlock(&child->sighand->siglock);
 }
 
-static bool looks_like_a_spurious_pid(struct task_struct *task)
-{
-	if (task->exit_code != ((PTRACE_EVENT_EXEC << 8) | SIGTRAP))
-		return false;
-
-	if (task_pid_vnr(task) == task->ptrace_message)
-		return false;
-	/*
-	 * The tracee changed its pid but the PTRACE_EVENT_EXEC event
-	 * was not wait()'ed, most probably debugger targets the old
-	 * leader which was destroyed in de_thread().
-	 */
-	return true;
-}
-
 /* Ensure that nothing can wake it up, even SIGKILL */
 static bool ptrace_freeze_traced(struct task_struct *task)
 {
@@ -188,8 +173,7 @@ static bool ptrace_freeze_traced(struct task_struct *task)
 		return ret;
 
 	spin_lock_irq(&task->sighand->siglock);
-	if (task_is_traced(task) && !looks_like_a_spurious_pid(task) &&
-	    !__fatal_signal_pending(task)) {
+	if (task_is_traced(task) && !__fatal_signal_pending(task)) {
 		task->state = __TASK_TRACED;
 		ret = true;
 	}
@@ -274,11 +258,17 @@ static int ptrace_check_attach(struct task_struct *child, bool ignore_state)
 	return ret;
 }
 
-static bool ptrace_has_cap(struct user_namespace *ns, unsigned int mode)
+static bool ptrace_has_cap(const struct cred *cred, struct user_namespace *ns,
+			   unsigned int mode)
 {
+	int ret;
+
 	if (mode & PTRACE_MODE_NOAUDIT)
-		return ns_capable_noaudit(ns, CAP_SYS_PTRACE);
-	return ns_capable(ns, CAP_SYS_PTRACE);
+		ret = security_capable(cred, ns, CAP_SYS_PTRACE, CAP_OPT_NOAUDIT);
+	else
+		ret = security_capable(cred, ns, CAP_SYS_PTRACE, CAP_OPT_NONE);
+
+	return ret == 0;
 }
 
 /* Returns 0 on success, -errno on denial. */
@@ -330,7 +320,7 @@ static int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	    gid_eq(caller_gid, tcred->sgid) &&
 	    gid_eq(caller_gid, tcred->gid))
 		goto ok;
-	if (ptrace_has_cap(tcred->user_ns, mode))
+	if (ptrace_has_cap(cred, tcred->user_ns, mode))
 		goto ok;
 	rcu_read_unlock();
 	return -EPERM;
@@ -349,7 +339,7 @@ ok:
 	mm = task->mm;
 	if (mm &&
 	    ((get_dumpable(mm) != SUID_DUMP_USER) &&
-	     !ptrace_has_cap(mm->user_ns, mode)))
+	     !ptrace_has_cap(cred, mm->user_ns, mode)))
 	    return -EPERM;
 
 	return security_ptrace_access_check(task, mode);
@@ -364,26 +354,6 @@ bool ptrace_may_access(struct task_struct *task, unsigned int mode)
 	return !err;
 }
 
-static int check_ptrace_options(unsigned long data)
-{
-	if (data & ~(unsigned long)PTRACE_O_MASK)
-		return -EINVAL;
-
-	if (unlikely(data & PTRACE_O_SUSPEND_SECCOMP)) {
-		if (!IS_ENABLED(CONFIG_CHECKPOINT_RESTORE) ||
-		    !IS_ENABLED(CONFIG_SECCOMP))
-			return -EINVAL;
-
-		if (!capable(CAP_SYS_ADMIN))
-			return -EPERM;
-
-		if (seccomp_mode(&current->seccomp) != SECCOMP_MODE_DISABLED ||
-		    current->ptrace & PT_SUSPEND_SECCOMP)
-			return -EPERM;
-	}
-	return 0;
-}
-
 static int ptrace_attach(struct task_struct *task, long request,
 			 unsigned long addr,
 			 unsigned long flags)
@@ -395,16 +365,8 @@ static int ptrace_attach(struct task_struct *task, long request,
 	if (seize) {
 		if (addr != 0)
 			goto out;
-		/*
-		 * This duplicates the check in check_ptrace_options() because
-		 * ptrace_attach() and ptrace_setoptions() have historically
-		 * used different error codes for unknown ptrace options.
-		 */
 		if (flags & ~(unsigned long)PTRACE_O_MASK)
 			goto out;
-		retval = check_ptrace_options(flags);
-		if (retval)
-			return retval;
 		flags = PT_PTRACED | PT_SEIZED | (flags << PT_OPT_FLAG_SHIFT);
 	} else {
 		flags = PT_PTRACED;
@@ -677,11 +639,22 @@ int ptrace_writedata(struct task_struct *tsk, char __user *src, unsigned long ds
 static int ptrace_setoptions(struct task_struct *child, unsigned long data)
 {
 	unsigned flags;
-	int ret;
 
-	ret = check_ptrace_options(data);
-	if (ret)
-		return ret;
+	if (data & ~(unsigned long)PTRACE_O_MASK)
+		return -EINVAL;
+
+	if (unlikely(data & PTRACE_O_SUSPEND_SECCOMP)) {
+		if (!IS_ENABLED(CONFIG_CHECKPOINT_RESTORE) ||
+		    !IS_ENABLED(CONFIG_SECCOMP))
+			return -EINVAL;
+
+		if (!capable(CAP_SYS_ADMIN))
+			return -EPERM;
+
+		if (seccomp_mode(&current->seccomp) != SECCOMP_MODE_DISABLED ||
+		    current->ptrace & PT_SUSPEND_SECCOMP)
+			return -EPERM;
+	}
 
 	/* Avoid intermediate state when all opts are cleared */
 	flags = child->ptrace;

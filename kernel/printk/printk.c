@@ -127,10 +127,8 @@ static int __control_devkmsg(char *str)
 
 static int __init control_devkmsg(char *str)
 {
-	if (__control_devkmsg(str) < 0) {
-		pr_warn("printk.devkmsg: bad option string '%s'\n", str);
+	if (__control_devkmsg(str) < 0)
 		return 1;
-	}
 
 	/*
 	 * Set sysctl string accordingly:
@@ -149,7 +147,7 @@ static int __init control_devkmsg(char *str)
 	 */
 	devkmsg_log |= DEVKMSG_LOG_MASK_LOCK;
 
-	return 1;
+	return 0;
 }
 __setup("printk.devkmsg=", control_devkmsg);
 
@@ -432,7 +430,7 @@ static u64 clear_seq;
 static u32 clear_idx;
 
 #define PREFIX_MAX		32
-#define LOG_LINE_MAX		(1024 - PREFIX_MAX)
+#define LOG_LINE_MAX		(3072 - PREFIX_MAX)
 
 #define LOG_LEVEL(v)		((v) & 0x07)
 #define LOG_FACILITY(v)		((v) >> 3 & 0xff)
@@ -2152,15 +2150,8 @@ static int __init console_setup(char *str)
 	char *s, *options, *brl_options = NULL;
 	int idx;
 
-	/*
-	 * console="" or console=null have been suggested as a way to
-	 * disable console output. Use ttynull that has been created
-	 * for exacly this purpose.
-	 */
-	if (str[0] == 0 || strcmp(str, "null") == 0) {
-		__add_preferred_console("ttynull", 0, NULL, NULL);
+	if (str[0] == 0)
 		return 1;
-	}
 
 	if (_braille_console_setup(&str, &brl_options))
 		return 1;
@@ -2252,6 +2243,8 @@ void resume_console(void)
 	console_unlock();
 }
 
+#ifdef CONFIG_CONSOLE_FLUSH_ON_HOTPLUG
+
 /**
  * console_cpu_notify - print deferred console messages after CPU hotplug
  * @cpu: unused
@@ -2270,6 +2263,8 @@ static int console_cpu_notify(unsigned int cpu)
 	}
 	return 0;
 }
+
+#endif
 
 /**
  * console_lock - lock the console system for exclusive use.
@@ -2640,13 +2635,25 @@ void register_console(struct console *newcon)
 	struct console *bcon = NULL;
 	struct console_cmdline *c;
 	static bool has_preferred;
+	bool duplicated = false;
 
 	if (console_drivers)
-		for_each_console(bcon)
+		for_each_console(bcon) {
 			if (WARN(bcon == newcon,
 					"console '%s%d' already registered\n",
 					bcon->name, bcon->index))
 				return;
+
+			if ((bcon->flags & CON_BOOT) && bcon->match &&
+				!bcon->match(bcon, newcon->name,
+					     newcon->index, NULL)) {
+				pr_info("Duplicated console '%s%d' & '%s%d'\n",
+					bcon->name, bcon->index,
+					newcon->name, newcon->index);
+
+				duplicated = true;
+			}
+		}
 
 	/*
 	 * before we register a new CON_BOOT console, make sure we don't
@@ -2722,8 +2729,18 @@ void register_console(struct console *newcon)
 		break;
 	}
 
-	if (!(newcon->flags & CON_ENABLED))
+	if (!(newcon->flags & CON_ENABLED)) {
+		if (duplicated) {
+			if (newcon->index < 0)
+				newcon->index = 0;
+
+			if (newcon->setup && newcon->setup(newcon, NULL))
+				pr_err("Failed to set up duplicated console "
+				       "'%s%d'\n", newcon->name, newcon->index);
+		}
+
 		return;
+	}
 
 	/*
 	 * If we have a bootconsole, and are switching to a real console,
@@ -2893,7 +2910,7 @@ void __init console_init(void)
 static int __init printk_late_init(void)
 {
 	struct console *con;
-	int ret;
+	int ret = 0;
 
 	for_each_console(con) {
 		if (!(con->flags & CON_BOOT))
@@ -2915,13 +2932,15 @@ static int __init printk_late_init(void)
 			unregister_console(con);
 		}
 	}
+#ifdef CONFIG_CONSOLE_FLUSH_ON_HOTPLUG
 	ret = cpuhp_setup_state_nocalls(CPUHP_PRINTK_DEAD, "printk:dead", NULL,
 					console_cpu_notify);
 	WARN_ON(ret < 0);
 	ret = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN, "printk:online",
 					console_cpu_notify, NULL);
 	WARN_ON(ret < 0);
-	return 0;
+#endif
+	return ret;
 }
 late_initcall(printk_late_init);
 

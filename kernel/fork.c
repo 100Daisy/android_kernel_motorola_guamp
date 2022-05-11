@@ -334,7 +334,7 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 
 	if (new) {
 		*new = *orig;
-		INIT_LIST_HEAD(&new->anon_vma_chain);
+		INIT_VMA(new);
 	}
 	return new;
 }
@@ -433,7 +433,7 @@ EXPORT_SYMBOL(free_task);
 static __latent_entropy int dup_mmap(struct mm_struct *mm,
 					struct mm_struct *oldmm)
 {
-	struct vm_area_struct *mpnt, *tmp, *prev, **pprev;
+	struct vm_area_struct *mpnt, *tmp, *prev, **pprev, *last = NULL;
 	struct rb_node **rb_link, *rb_parent;
 	int retval;
 	unsigned long charge;
@@ -552,8 +552,18 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 		rb_parent = &tmp->vm_rb;
 
 		mm->map_count++;
-		if (!(tmp->vm_flags & VM_WIPEONFORK))
+		if (!(tmp->vm_flags & VM_WIPEONFORK)) {
+			if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT)) {
+				/*
+				 * Mark this VMA as changing to prevent the
+				 * speculative page fault hanlder to process
+				 * it until the TLB are flushed below.
+				 */
+				last = mpnt;
+				vm_write_begin(mpnt);
+			}
 			retval = copy_page_range(mm, oldmm, mpnt);
+		}
 
 		if (tmp->vm_ops && tmp->vm_ops->open)
 			tmp->vm_ops->open(tmp);
@@ -566,6 +576,22 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 out:
 	up_write(&mm->mmap_sem);
 	flush_tlb_mm(oldmm);
+
+	if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT)) {
+		/*
+		 * Since the TLB has been flush, we can safely unmark the
+		 * copied VMAs and allows the speculative page fault handler to
+		 * process them again.
+		 * Walk back the VMA list from the last marked VMA.
+		 */
+		for (; last; last = last->vm_prev) {
+			if (last->vm_flags & VM_DONTCOPY)
+				continue;
+			if (!(last->vm_flags & VM_WIPEONFORK))
+				vm_write_end(last);
+		}
+	}
+
 	up_write(&oldmm->mmap_sem);
 	dup_userfaultfd_complete(&uf);
 fail_uprobe_end:
@@ -610,7 +636,13 @@ static void check_mm(struct mm_struct *mm)
 	int i;
 
 	for (i = 0; i < NR_MM_COUNTERS; i++) {
-		long x = atomic_long_read(&mm->rss_stat.count[i]);
+		long x;
+
+		/* MM_UNRECLAIMABLE could be freed later in exit_files */
+		if (i == MM_UNRECLAIMABLE)
+			continue;
+
+		x = atomic_long_read(&mm->rss_stat.count[i]);
 
 		if (unlikely(x))
 			printk(KERN_ALERT "BUG: Bad rss-counter state "
@@ -954,6 +986,9 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 	mm->mmap = NULL;
 	mm->mm_rb = RB_ROOT;
 	mm->vmacache_seqnum = 0;
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+	rwlock_init(&mm->mm_rb_lock);
+#endif
 	atomic_set(&mm->mm_users, 1);
 	atomic_set(&mm->mm_count, 1);
 	init_rwsem(&mm->mmap_sem);
@@ -977,7 +1012,6 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 	mm->pmd_huge_pte = NULL;
 #endif
 	mm_init_uprobes_state(mm);
-	hugetlb_count_init(mm);
 
 	if (current->mm) {
 		mm->flags = current->mm->flags & MMF_INIT_MASK;
@@ -1233,8 +1267,24 @@ static int wait_for_vfork_done(struct task_struct *child,
  * restoring the old one. . .
  * Eric Biederman 10 January 1998
  */
-static void mm_release(struct task_struct *tsk, struct mm_struct *mm)
+void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 {
+	/* Get rid of any futexes when releasing the mm */
+#ifdef CONFIG_FUTEX
+	if (unlikely(tsk->robust_list)) {
+		exit_robust_list(tsk);
+		tsk->robust_list = NULL;
+	}
+#ifdef CONFIG_COMPAT
+	if (unlikely(tsk->compat_robust_list)) {
+		compat_exit_robust_list(tsk);
+		tsk->compat_robust_list = NULL;
+	}
+#endif
+	if (unlikely(!list_empty(&tsk->pi_state_list)))
+		exit_pi_state_list(tsk);
+#endif
+
 	uprobe_free_utask(tsk);
 
 	/* Get rid of any cached register state */
@@ -1265,18 +1315,6 @@ static void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 	 */
 	if (tsk->vfork_done)
 		complete_vfork_done(tsk);
-}
-
-void exit_mm_release(struct task_struct *tsk, struct mm_struct *mm)
-{
-	futex_exit_release(tsk);
-	mm_release(tsk, mm);
-}
-
-void exec_mm_release(struct task_struct *tsk, struct mm_struct *mm)
-{
-	futex_exec_release(tsk);
-	mm_release(tsk, mm);
 }
 
 /*
@@ -1682,11 +1720,11 @@ static void pidfd_show_fdinfo(struct seq_file *m, struct file *f)
 /*
  * Poll support for process exit notification.
  */
-static __poll_t pidfd_poll(struct file *file, struct poll_table_struct *pts)
+static unsigned int pidfd_poll(struct file *file, struct poll_table_struct *pts)
 {
 	struct task_struct *task;
 	struct pid *pid = file->private_data;
-	__poll_t poll_flags = 0;
+	int poll_flags = 0;
 
 	poll_wait(file, &pid->wait_pidfd, pts);
 
@@ -1698,7 +1736,7 @@ static __poll_t pidfd_poll(struct file *file, struct poll_table_struct *pts)
 	 * group, then poll(2) should block, similar to the wait(2) family.
 	 */
 	if (!task || (task->exit_state && thread_group_empty(task)))
-		poll_flags = EPOLLIN | EPOLLRDNORM;
+		poll_flags = POLLIN | POLLRDNORM;
 	rcu_read_unlock();
 
 	return poll_flags;
@@ -1826,6 +1864,8 @@ static __latent_entropy struct task_struct *copy_process(
 	}
 
 	if (clone_flags & CLONE_PIDFD) {
+		int reserved;
+
 		/*
 		 * - CLONE_PARENT_SETTID is useless for pidfds and also
 		 *   parent_tidptr is used to return pidfds.
@@ -1835,6 +1875,16 @@ static __latent_entropy struct task_struct *copy_process(
 		 */
 		if (clone_flags &
 		    (CLONE_DETACHED | CLONE_PARENT_SETTID | CLONE_THREAD))
+			return ERR_PTR(-EINVAL);
+
+		/*
+		 * Verify that parent_tidptr is sane so we can potentially
+		 * reuse it later.
+		 */
+		if (get_user(reserved, parent_tidptr))
+			return ERR_PTR(-EFAULT);
+
+		if (reserved != 0)
 			return ERR_PTR(-EINVAL);
 	}
 
@@ -2063,8 +2113,14 @@ static __latent_entropy struct task_struct *copy_process(
 #ifdef CONFIG_BLOCK
 	p->plug = NULL;
 #endif
-	futex_init_task(p);
-
+#ifdef CONFIG_FUTEX
+	p->robust_list = NULL;
+#ifdef CONFIG_COMPAT
+	p->compat_robust_list = NULL;
+#endif
+	INIT_LIST_HEAD(&p->pi_state_list);
+	p->pi_state_cache = NULL;
+#endif
 	/*
 	 * sigaltstack should be cleared when sharing the same VM
 	 */
@@ -2270,6 +2326,7 @@ bad_fork_cleanup_perf:
 	perf_event_free_task(p);
 bad_fork_cleanup_policy:
 	lockdep_free_task(p);
+	free_task_load_ptrs(p);
 #ifdef CONFIG_NUMA
 	mpol_put(p->mempolicy);
 bad_fork_cleanup_threadgroup_lock:

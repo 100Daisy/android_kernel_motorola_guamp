@@ -17,6 +17,7 @@
  */
 #include "sched.h"
 #include "pelt.h"
+#include "walt.h"
 
 struct dl_bandwidth def_dl_bandwidth;
 
@@ -1380,6 +1381,7 @@ void inc_dl_tasks(struct sched_dl_entity *dl_se, struct dl_rq *dl_rq)
 	WARN_ON(!dl_prio(prio));
 	dl_rq->dl_nr_running++;
 	add_nr_running(rq_of_dl_rq(dl_rq), 1);
+	walt_inc_cumulative_runnable_avg(rq_of_dl_rq(dl_rq), dl_task_of(dl_se));
 
 	inc_dl_deadline(dl_rq, deadline);
 	inc_dl_migration(dl_se, dl_rq);
@@ -1394,6 +1396,7 @@ void dec_dl_tasks(struct sched_dl_entity *dl_se, struct dl_rq *dl_rq)
 	WARN_ON(!dl_rq->dl_nr_running);
 	dl_rq->dl_nr_running--;
 	sub_nr_running(rq_of_dl_rq(dl_rq), 1);
+	walt_dec_cumulative_runnable_avg(rq_of_dl_rq(dl_rq), dl_task_of(dl_se));
 
 	dec_dl_deadline(dl_rq, dl_se->deadline);
 	dec_dl_migration(dl_se, dl_rq);
@@ -1655,7 +1658,6 @@ static void migrate_task_rq_dl(struct task_struct *p, int new_cpu __maybe_unused
 	 */
 	raw_spin_lock(&rq->lock);
 	if (p->dl.dl_non_contending) {
-		update_rq_clock(rq);
 		sub_running_bw(&p->dl, &rq->dl);
 		p->dl.dl_non_contending = 0;
 		/*
@@ -2126,7 +2128,9 @@ retry:
 	deactivate_task(rq, next_task, 0);
 	sub_running_bw(&next_task->dl, &rq->dl);
 	sub_rq_bw(&next_task->dl, &rq->dl);
+	next_task->on_rq = TASK_ON_RQ_MIGRATING;
 	set_task_cpu(next_task, later_rq->cpu);
+	next_task->on_rq = TASK_ON_RQ_QUEUED;
 	add_rq_bw(&next_task->dl, &later_rq->dl);
 
 	/*
@@ -2224,7 +2228,9 @@ static void pull_dl_task(struct rq *this_rq)
 			deactivate_task(src_rq, p, 0);
 			sub_running_bw(&p->dl, &src_rq->dl);
 			sub_rq_bw(&p->dl, &src_rq->dl);
+			p->on_rq = TASK_ON_RQ_MIGRATING;
 			set_task_cpu(p, this_cpu);
+			p->on_rq = TASK_ON_RQ_QUEUED;
 			add_rq_bw(&p->dl, &this_rq->dl);
 			add_running_bw(&p->dl, &this_rq->dl);
 			activate_task(this_rq, p, 0);
@@ -2458,6 +2464,9 @@ const struct sched_class dl_sched_class = {
 	.switched_to		= switched_to_dl,
 
 	.update_curr		= update_curr_dl,
+#ifdef CONFIG_SCHED_WALT
+	.fixup_walt_sched_stats	= fixup_walt_sched_stats_common,
+#endif
 };
 
 int sched_dl_global_validate(void)
@@ -2466,7 +2475,7 @@ int sched_dl_global_validate(void)
 	u64 period = global_rt_period();
 	u64 new_bw = to_ratio(period, runtime);
 	struct dl_bw *dl_b;
-	int cpu, cpus, ret = 0;
+	int cpu, ret = 0;
 	unsigned long flags;
 
 	/*
@@ -2481,10 +2490,9 @@ int sched_dl_global_validate(void)
 	for_each_possible_cpu(cpu) {
 		rcu_read_lock_sched();
 		dl_b = dl_bw_of(cpu);
-		cpus = dl_bw_cpus(cpu);
 
 		raw_spin_lock_irqsave(&dl_b->lock, flags);
-		if (new_bw * cpus < dl_b->total_bw)
+		if (new_bw < dl_b->total_bw)
 			ret = -EBUSY;
 		raw_spin_unlock_irqrestore(&dl_b->lock, flags);
 
@@ -2617,7 +2625,7 @@ void __setparam_dl(struct task_struct *p, const struct sched_attr *attr)
 	dl_se->dl_runtime = attr->sched_runtime;
 	dl_se->dl_deadline = attr->sched_deadline;
 	dl_se->dl_period = attr->sched_period ?: dl_se->dl_deadline;
-	dl_se->flags = attr->sched_flags & SCHED_DL_FLAGS;
+	dl_se->flags = attr->sched_flags;
 	dl_se->dl_bw = to_ratio(dl_se->dl_period, dl_se->dl_runtime);
 	dl_se->dl_density = to_ratio(dl_se->dl_deadline, dl_se->dl_runtime);
 }
@@ -2630,8 +2638,7 @@ void __getparam_dl(struct task_struct *p, struct sched_attr *attr)
 	attr->sched_runtime = dl_se->dl_runtime;
 	attr->sched_deadline = dl_se->dl_deadline;
 	attr->sched_period = dl_se->dl_period;
-	attr->sched_flags &= ~SCHED_DL_FLAGS;
-	attr->sched_flags |= dl_se->flags;
+	attr->sched_flags = dl_se->flags;
 }
 
 /*
@@ -2706,7 +2713,7 @@ bool dl_param_changed(struct task_struct *p, const struct sched_attr *attr)
 	if (dl_se->dl_runtime != attr->sched_runtime ||
 	    dl_se->dl_deadline != attr->sched_deadline ||
 	    dl_se->dl_period != attr->sched_period ||
-	    dl_se->flags != (attr->sched_flags & SCHED_DL_FLAGS))
+	    dl_se->flags != attr->sched_flags)
 		return true;
 
 	return false;
