@@ -691,7 +691,8 @@ qla2x00_rff_id(scsi_qla_host_t *vha, u8 type)
 		return (QLA_SUCCESS);
 	}
 
-	return qla_async_rffid(vha, &vha->d_id, qlt_rff_id(vha), type);
+	return qla_async_rffid(vha, &vha->d_id, qlt_rff_id(vha),
+	    FC4_TYPE_FCP_SCSI);
 }
 
 static int qla_async_rffid(scsi_qla_host_t *vha, port_id_t *d_id,
@@ -743,7 +744,7 @@ static int qla_async_rffid(scsi_qla_host_t *vha, port_id_t *d_id,
 	ct_req->req.rff_id.port_id[1] = d_id->b.area;
 	ct_req->req.rff_id.port_id[2] = d_id->b.al_pa;
 	ct_req->req.rff_id.fc4_feature = fc4feature;
-	ct_req->req.rff_id.fc4_type = fc4type;		/* SCSI-FCP or FC-NVMe */
+	ct_req->req.rff_id.fc4_type = fc4type;		/* SCSI - FCP */
 
 	sp->u.iocb_cmd.u.ctarg.req_size = RFF_ID_REQ_SIZE;
 	sp->u.iocb_cmd.u.ctarg.rsp_size = RFF_ID_RSP_SIZE;
