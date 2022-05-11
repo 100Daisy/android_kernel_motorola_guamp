@@ -558,11 +558,9 @@ void notrace cpu_init(void)
 	 * In Thumb-2, msr with an immediate value is not allowed.
 	 */
 #ifdef CONFIG_THUMB2_KERNEL
-#define PLC_l	"l"
-#define PLC_r	"r"
+#define PLC	"r"
 #else
-#define PLC_l	"I"
-#define PLC_r	"I"
+#define PLC	"I"
 #endif
 
 	/*
@@ -584,15 +582,15 @@ void notrace cpu_init(void)
 	"msr	cpsr_c, %9"
 	    :
 	    : "r" (stk),
-	      PLC_r (PSR_F_BIT | PSR_I_BIT | IRQ_MODE),
+	      PLC (PSR_F_BIT | PSR_I_BIT | IRQ_MODE),
 	      "I" (offsetof(struct stack, irq[0])),
-	      PLC_r (PSR_F_BIT | PSR_I_BIT | ABT_MODE),
+	      PLC (PSR_F_BIT | PSR_I_BIT | ABT_MODE),
 	      "I" (offsetof(struct stack, abt[0])),
-	      PLC_r (PSR_F_BIT | PSR_I_BIT | UND_MODE),
+	      PLC (PSR_F_BIT | PSR_I_BIT | UND_MODE),
 	      "I" (offsetof(struct stack, und[0])),
-	      PLC_r (PSR_F_BIT | PSR_I_BIT | FIQ_MODE),
+	      PLC (PSR_F_BIT | PSR_I_BIT | FIQ_MODE),
 	      "I" (offsetof(struct stack, fiq[0])),
-	      PLC_l (PSR_F_BIT | PSR_I_BIT | SVC_MODE)
+	      PLC (PSR_F_BIT | PSR_I_BIT | SVC_MODE)
 	    : "r14");
 #endif
 }
@@ -835,6 +833,8 @@ static int __init early_mem(char *p)
 	u64 size;
 	u64 start;
 	char *endp;
+	struct memblock_region *r;
+	phys_addr_t region_end;
 
 	/*
 	 * If the user specifies memory size, we
@@ -843,8 +843,8 @@ static int __init early_mem(char *p)
 	 */
 	if (usermem == 0) {
 		usermem = 1;
-		memblock_remove(memblock_start_of_DRAM(),
-			memblock_end_of_DRAM() - memblock_start_of_DRAM());
+		//memblock_remove(memblock_start_of_DRAM(),
+		//	memblock_end_of_DRAM() - memblock_start_of_DRAM() + 1);
 	}
 
 	start = PHYS_OFFSET;
@@ -852,7 +852,16 @@ static int __init early_mem(char *p)
 	if (*endp == '@')
 		start = memparse(endp + 1, NULL);
 
-	arm_add_memory(start, size);
+	for_each_memblock(memory, r) {
+		region_end = r->base - 1 + r->size;
+	}
+	//memblock_mem_limit_remove_map(size);
+	memblock_cap_memory_range(0, start + size);
+	for_each_memblock(memory, r) {
+		region_end = r->base - 1 + r->size;
+	}
+	//arm_add_memory(start, size);
+	//memblock_remove(0x7e280000, 0x80000000 - 0x7e280000);
 
 	return 0;
 }
@@ -1084,6 +1093,8 @@ void __init hyp_mode_check(void)
 #endif
 }
 
+void __init __weak init_random_pool(void) { }
+
 void __init setup_arch(char **cmdline_p)
 {
 	const struct machine_desc *mdesc;
@@ -1182,6 +1193,8 @@ void __init setup_arch(char **cmdline_p)
 
 	if (mdesc->init_early)
 		mdesc->init_early();
+
+	init_random_pool();
 }
 
 

@@ -45,7 +45,7 @@ static void ci_leaf_init(struct cacheinfo *this_leaf,
 	this_leaf->type = type;
 }
 
-int init_cache_level(unsigned int cpu)
+static int __init_cache_level(unsigned int cpu)
 {
 	unsigned int ctype, level, leaves, fw_level;
 	struct cpu_cacheinfo *this_cpu_ci = get_cpu_cacheinfo(cpu);
@@ -80,7 +80,7 @@ int init_cache_level(unsigned int cpu)
 	return 0;
 }
 
-int populate_cache_leaves(unsigned int cpu)
+static int __populate_cache_leaves(unsigned int cpu)
 {
 	unsigned int level, idx;
 	enum cache_type type;
@@ -99,3 +99,6 @@ int populate_cache_leaves(unsigned int cpu)
 	}
 	return 0;
 }
+
+DEFINE_SMP_CALL_CACHE_FUNCTION(init_cache_level)
+DEFINE_SMP_CALL_CACHE_FUNCTION(populate_cache_leaves)

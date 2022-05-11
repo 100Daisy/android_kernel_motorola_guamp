@@ -20,6 +20,7 @@
 
 #include <asm/page.h>
 #include <asm/memory.h>
+#include <asm/mmu_context.h>
 #include <asm/cpufeature.h>
 
 /*
@@ -438,9 +439,7 @@ static inline void *kvm_get_hyp_vector(void)
 	void *vect = kern_hyp_va(kvm_ksym_ref(__kvm_hyp_vector));
 	int slot = -1;
 
-	if ((cpus_have_const_cap(ARM64_HARDEN_BRANCH_PREDICTOR) ||
-	     cpus_have_const_cap(ARM64_SPECTRE_BHB)) &&
-	    data && data->template_start) {
+	if (cpus_have_const_cap(ARM64_HARDEN_BRANCH_PREDICTOR) && data->fn) {
 		vect = kern_hyp_va(kvm_ksym_ref(__bp_harden_hyp_vecs_start));
 		slot = data->hyp_vectors_slot;
 	}
@@ -469,8 +468,7 @@ static inline int kvm_map_vectors(void)
 	 * !HBP +  HEL2 -> allocate one vector slot and use exec mapping
 	 *  HBP +  HEL2 -> use hardened vertors and use exec mapping
 	 */
-	if (cpus_have_const_cap(ARM64_HARDEN_BRANCH_PREDICTOR) ||
-	    cpus_have_const_cap(ARM64_SPECTRE_BHB)) {
+	if (cpus_have_const_cap(ARM64_HARDEN_BRANCH_PREDICTOR)) {
 		__kvm_bp_vect_base = kvm_ksym_ref(__bp_harden_hyp_vecs_start);
 		__kvm_bp_vect_base = kern_hyp_va(__kvm_bp_vect_base);
 	}
@@ -530,6 +528,20 @@ static inline int hyp_map_aux_data(void)
 #endif
 
 #define kvm_phys_to_vttbr(addr)		phys_to_ttbr(addr)
+
+static inline void kvm_workaround_1542418_vmid_rollover(void)
+{
+	unsigned long flags;
+
+	if (!IS_ENABLED(CONFIG_ARM64_ERRATUM_1542418) ||
+	    !cpus_have_const_cap(ARM64_WORKAROUND_1542418))
+		return;
+
+	local_irq_save(flags);
+	arm64_workaround_1542418_asid_rollover();
+	local_irq_restore(flags);
+
+}
 
 #endif /* __ASSEMBLY__ */
 #endif /* __ARM64_KVM_MMU_H__ */
