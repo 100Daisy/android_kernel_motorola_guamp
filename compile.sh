@@ -46,7 +46,7 @@ zip_kernelimage() {
     rm -rf AnyKernel3/*.zip
     BUILD_TIME=$(date +"%d%m%Y-%H%M")
     cd AnyKernel3
-    KERNEL_NAME=ACK-DaisyKernel-guamp-"${BUILD_TIME}"
+    KERNEL_NAME=SunBurn-guamp-"${BUILD_TIME}"
     zip -r9 "$KERNEL_NAME".zip ./*
     cd ..
 }
