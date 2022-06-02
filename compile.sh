@@ -36,7 +36,7 @@ build_clang() {
     CROSS_COMPILE_ARM32=arm-linux-androideabi-
 }
 
-make vendor/guamp_defconfig ARCH=arm64 O=out CC=clang
+make vendor/sunburn_defconfig ARCH=arm64 O=out CC=clang
 build_clang
 
 # Zip up the kernel
