@@ -641,6 +641,13 @@ void bat_ntc_10k() {
         	{adcmap_batt_therm_30k_6125, ARRAY_SIZE(adcmap_batt_therm_30k_6125)},
         };
     }
+	if (strnstr(saved_command_line, "androidboot.hab.product=guamp", strlen(saved_command_line))) {
+        const struct lut_table lut_table_30[] = {
+            {adcmap_batt_therm_30k_NTC10K, ARRAY_SIZE(adcmap_batt_therm_30k_NTC10K)},
+        	{adcmap_batt_therm_30k,	ARRAY_SIZE(adcmap_batt_therm_30k)},
+        	{adcmap_batt_therm_30k_6125, ARRAY_SIZE(adcmap_batt_therm_30k_6125)},
+        };
+    }
 }   
 
 void bat_ntc_10k(void);
