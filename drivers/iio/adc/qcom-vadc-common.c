@@ -7,7 +7,7 @@
 #include <linux/err.h>
 #include <linux/module.h>
 
-#include "qcom-vadc-common.h"
+#include "qcom-vadc-common.h" 
 
 /* Voltage to temperature */
 static const struct vadc_map_pt adcmap_100k_104ef_104fb[] = {
@@ -555,7 +555,6 @@ struct lut_table {
 	u32 tablesize;
 };
 
-#ifdef CONFIG_BAT_NTC_10K
 static const struct vadc_map_pt adcmap_batt_therm_30k_NTC10K[] = {
 	{1618,	-400},
 	{1593,	-380},
@@ -628,15 +627,23 @@ static const struct vadc_map_pt adcmap_batt_therm_30k_NTC10K[] = {
 	{65,	960},
 	{62,	980}
 };
-#endif
 
-static const struct lut_table lut_table_30[] = {
-#ifdef CONFIG_BAT_NTC_10K
-	{adcmap_batt_therm_30k_NTC10K, ARRAY_SIZE(adcmap_batt_therm_30k_NTC10K)},
-#endif
+const struct lut_table lut_table_30[] = {
 	{adcmap_batt_therm_30k,	ARRAY_SIZE(adcmap_batt_therm_30k)},
 	{adcmap_batt_therm_30k_6125, ARRAY_SIZE(adcmap_batt_therm_30k_6125)},
 };
+
+void bat_ntc_10k() {
+    if (strnstr(saved_command_line, "androidboot.hab.product=cebu", strlen(saved_command_line))) {
+        const struct lut_table lut_table_30[] = {
+            {adcmap_batt_therm_30k_NTC10K, ARRAY_SIZE(adcmap_batt_therm_30k_NTC10K)},
+        	{adcmap_batt_therm_30k,	ARRAY_SIZE(adcmap_batt_therm_30k)},
+        	{adcmap_batt_therm_30k_6125, ARRAY_SIZE(adcmap_batt_therm_30k_6125)},
+        };
+    }
+}   
+
+void bat_ntc_10k(void);
 
 static const struct lut_table lut_table_100[] = {
 	{adcmap_batt_therm_100k, ARRAY_SIZE(adcmap_batt_therm_100k)},
