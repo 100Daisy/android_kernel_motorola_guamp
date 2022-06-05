@@ -1,20 +1,31 @@
 name: Build kernel
 
-on: 
+on:
   push:
 
 
 jobs:
 
-  build:
+  guamp:
     runs-on: ubuntu-20.04
 
-   
+
     steps:
     - name: Checkout
       uses: actions/checkout@main
-      
+
     - name: Start
       run: |
-        chmod a+x compile.sh
-        ./compile.sh
+        ./compile.sh guamp
+
+  cebu:
+    runs-on: ubuntu-20.04
+
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: Start
+      run: |
+        ./compile.sh cebu
