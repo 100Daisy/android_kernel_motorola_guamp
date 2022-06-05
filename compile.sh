@@ -15,7 +15,7 @@ git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linu
 git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b android11-release binutils-32
 
 # Clone AnyKernel3
-git clone --depth=1 https://github.com/100Daisy/AnyKernel3 -b guamp-ack
+git clone --depth=1 https://github.com/100Daisy/AnyKernel3 -b sunburn-$1
 
 # Export the PATH variable
 export PATH="$(pwd)/clang/bin:$(pwd)/binutils/bin:$(pwd)/binutils-32/bin:$PATH"
@@ -36,7 +36,7 @@ build_clang() {
     CROSS_COMPILE_ARM32=arm-linux-androideabi-
 }
 
-make vendor/guamp_defconfig ARCH=arm64 O=out CC=clang
+make vendor/sunburn-$1_defconfig ARCH=arm64 O=out CC=clang
 build_clang
 
 # Zip up the kernel
@@ -46,14 +46,14 @@ zip_kernelimage() {
     rm -rf AnyKernel3/*.zip
     BUILD_TIME=$(date +"%d%m%Y-%H%M")
     cd AnyKernel3
-    KERNEL_NAME=SunBurn-guamp-"${BUILD_TIME}"
+    KERNEL_NAME=SunBurn-$1-"${BUILD_TIME}"
     zip -r9 "$KERNEL_NAME".zip ./*
     cd ..
 }
 
 FILE="$(pwd)/out/arch/arm64/boot/Image.gz-dtb"
 if [ -f "$FILE" ]; then
-    zip_kernelimage
+    zip_kernelimage $1
     KERN_FINAL="$(pwd)/AnyKernel3/"$KERNEL_NAME".zip"
     echo "The kernel has successfully been compiled and can be found in $KERN_FINAL"
     if [ "$UPLD" = 1 ]; then
