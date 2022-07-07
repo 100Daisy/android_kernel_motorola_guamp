@@ -1,0 +1,38 @@
+#
+# Novatek NT36xxx touchscreen driver configuration
+#
+config TOUCHSCREEN_NT36xxx_HOSTDL_SPI_MMI
+	tristate "Moto Novatek NT36xxx host download SPI driver"
+	default n
+	help
+	  Say Y here if you have a Moto Novatek NT36xxx no flash touchscreen connected
+	  to your system by SPI bus.
+
+	  If unsure, say N.
+
+config INPUT_NOVA_0FLASH_MMI_ENABLE_DOUBLE_TAP
+	bool "Moto Novatek NT36xxx Double tap"
+	depends on TOUCHSCREEN_NT36xxx_HOSTDL_SPI_MMI
+	default n
+	help
+	  Say Y here if you want to have Double tap support on Moto Novatek NT36xxx.
+
+	  If unsure, say N.
+
+config INPUT_NOVA_PANEL_NOTIFICATIONS
+	bool "Moto Novatek NT36xxx panel notification"
+	depends on TOUCHSCREEN_NT36xxx_HOSTDL_SPI_MMI
+	default n
+	help
+	  Say Y here if you want to have panel notification support on Moto Novatek NT36xxx.
+
+	  If unsure, say N.
+
+config NOVA_ESD_ENABLE
+        bool "Moto Novatek NT36xxx ESD Detection"
+        depends on TOUCHSCREEN_NT36xxx_HOSTDL_SPI_MMI
+        default n
+        help
+          Say Y here if you want to have ESD Detection support on Moto Novatek NT36xxx.
+
+          If unsure, say N.
