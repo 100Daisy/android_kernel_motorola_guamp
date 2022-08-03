@@ -11,42 +11,42 @@
 
 		opp-980000000 {
 			opp-hz = /bits/ 64 <980000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_TURBO>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_TURBO_L1>;
 		};
 
 		opp-950000000 {
 			opp-hz = /bits/ 64 <950000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_NOM_L2>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_TURBO_L1>;
 		};
 
 		opp-900000000 {
 			opp-hz = /bits/ 64 <900000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_NOM_L1>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_TURBO>;
 		};
 
 		opp-820000000 {
 			opp-hz = /bits/ 64 <820000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_NOM>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_NOM_L1>;
 		};
 
 		opp-745000000 {
 			opp-hz = /bits/ 64 <745000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_SVS_L0>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_NOM>;
 		};
 
 		opp-600000000 {
 			opp-hz = /bits/ 64 <600000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_LOW_SVS>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_SVS_L1>;
 		};
 
 		opp-465000000 {
 			opp-hz = /bits/ 64 <465000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_MIN_SVS>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_SVS>;
 		};
 
 		opp-320000000 {
 			opp-hz = /bits/ 64 <320000000>;
-			opp-microvolt = <RPMH_REGULATOR_LEVEL_MIN_SVS>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_LOW_SVS>;
 		};
 	};
 
@@ -107,7 +107,7 @@
 		qcom,chipid = <0x06010000>;
 
 		qcom,initial-pwrlevel = <6>;
-		qcom,idle-timeout = <58>;
+		qcom,idle-timeout = <80>;
 
 		qcom,ubwc-mode = <1>;
 		qcom,min-access-length = <64>;
@@ -126,12 +126,11 @@
 			<&gpucc GPU_CC_AHB_CLK>,
 			<&gcc GCC_GPU_MEMNOC_GFX_CLK>,
 			<&gpucc GPU_CC_CX_GMU_CLK>,
-			<&gpucc GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK>,
-			<&rpmcc RPM_SMD_QDSS_CLK>;
+			<&gpucc GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK>;
 
 		clock-names = "core_clk", "rbbmtimer_clk", "iface_clk",
 				"ahb_clk", "mem_clk", "gmu_clk",
-				"smmu_vote", "apb_pclk";
+				"smmu_vote";
 
 		/* Bus Scale Settings */
 		qcom,gpubw-dev = <&gpubw>;

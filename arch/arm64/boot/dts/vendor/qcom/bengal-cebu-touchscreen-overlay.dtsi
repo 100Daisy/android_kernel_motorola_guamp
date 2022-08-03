@@ -190,29 +190,11 @@
 		report_type = <1>;
 		novatek,def-max-resolution = <720 1640>;
                 novatek,usb_charger;
-                novatek,def-build-id = <0x0501>;
-                novatek,def-config-id = <0x6026>;
 		interrupt-parent = <&tlmm>;
 		interrupts = <67 0x02>;
 		pinctrl-names = "pmx_ts_active","pmx_ts_suspend";
 		pinctrl-0 = <&ts_int_active &ts_reset_active>;
 		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
-	};
-	chipone_tddi@2 {
-		compatible = "chipone-tddi";
-		reg = <2>;
-		spi-max-frequency = <4800000>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <67 0x2008>;
-		spi-cpha;
-		spi-cpol;
-		chipone,rst-gpio = <&tlmm 66 0x00>;
-		chipone,irq-gpio = <&tlmm 67 0x2008>;
-		chipone,x-res = <720>;
-		chipone,y-res = <1640>;
-		chipone,def-build-id = <0x020b>;
-		chipone,def-config-id = <0x0001>;
-		panel = <&dsi_dsbj_icnl9911c_video>;
 	};
 
 };

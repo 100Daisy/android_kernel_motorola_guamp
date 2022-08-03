@@ -168,7 +168,7 @@
 		"fi",		/* 151 */
 		"vzwpre",	/* 152 */
 		"boost",	/* 153 */
-		"spectrum",	/* 154 */
+		"undefined",	/* 154 */
 		"undefined",	/* 155 */
 		"undefined",	/* 156 */
 		"undefined",	/* 157 */
@@ -227,7 +227,7 @@
 		"retsea",	/* 210 */
 		"retjp",	/* 211 */
 		"softbank",	/* 212 */
-		"optus",	/* 213 */
+		"undefined",	/* 213 */
 		"undefined",	/* 214 */
 		"undefined",	/* 215 */
 		"undefined",	/* 216 */

@@ -21,7 +21,6 @@
 	dsi_tm_nt36525b_video:qcom,mdss_dsi_nt36525b_tm_video {
 		qcom,mdss-dsi-panel-name ="mipi_mot_vid_tm_720p_678";
 		qcom,mdss-dsi-panel-type = "dsi_video_mode";
-                qcom,mdss-dsi-panel-supplier = "tianma";
 
 		qcom,dsi-ctrl-num = <0>;
 		qcom,dsi-phy-num = <0>;
@@ -131,7 +130,7 @@
 					15 01 00 00 00 00 02 BA 03
 					15 01 00 00 00 00 02 35 00
 					39 01 00 00 00 00 03 51 0C CC
-					15 01 00 00 00 00 02 53 2C
+					15 01 00 00 00 00 02 53 24
 					15 01 00 00 00 00 02 55 01
 					05 01 00 00 78 00 01 11
 					05 01 00 00 14 00 01 29
